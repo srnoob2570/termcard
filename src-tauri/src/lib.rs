@@ -4,7 +4,6 @@ pub mod ir;
 pub mod redact;
 pub mod theme;
 
-use capture::RunOutcome;
 use once_store::Store;
 use redact::Redaction;
 use std::sync::atomic::AtomicBool;
@@ -38,10 +37,18 @@ mod once_store {
         }
 
         pub fn load_json() -> serde_json::Value {
-            std::fs::read_to_string(Self::path())
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or(serde_json::json!({}))
+            match std::fs::read_to_string(Self::path()) {
+                Ok(s) => match serde_json::from_str(&s) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // A corrupt store must not silently wipe the user's
+                        // settings without a trace.
+                        eprintln!("termcard: store file is corrupt, starting empty: {e}");
+                        serde_json::json!({})
+                    }
+                },
+                Err(_) => serde_json::json!({}), // First run: no file yet.
+            }
         }
 
         pub fn save_json(value: &serde_json::Value) -> Result<(), String> {
@@ -50,7 +57,11 @@ mod once_store {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
             let text = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-            std::fs::write(path, text).map_err(|e| e.to_string())
+            // Write to a temp file in the same dir and rename, so a crash
+            // mid-write can't leave a half-written store behind.
+            let tmp = path.with_extension("json.tmp");
+            std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
+            std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
         }
     }
 }
@@ -65,7 +76,19 @@ fn save_prefs(prefs: serde_json::Value) -> Result<(), String> {
     Store::save_json(&prefs)
 }
 
-/// Runs the command in a PTY and returns the capture as UNREDACTED JSON:
+/// Result of a capture run, serialized to the frontend with camelCase keys:
+/// `capture`, `exitCode` (null when the process was killed by stop/timeout),
+/// `truncated` and `timedOut`.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureResult {
+    pub capture: ir::Capture,
+    pub exit_code: Option<u32>,
+    pub truncated: bool,
+    pub timed_out: bool,
+}
+
+/// Runs the command in a PTY and returns the capture UNREDACTED:
 /// redaction is applied at render time (preview/export) so that editing
 /// rules updates the preview without re-capturing.
 #[tauri::command]
@@ -73,7 +96,7 @@ async fn run_capture(
     state: State<'_, AppState>,
     command: String,
     cwd: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<CaptureResult, String> {
     {
         let mut running = state.running.lock().await;
         if *running {
@@ -86,19 +109,53 @@ async fn run_capture(
         .stop
         .store(false, std::sync::atomic::Ordering::Relaxed);
 
+    // Normalize before it reaches the PTY: "" means "no directory", and the
+    // spawned process does no tilde expansion on cwd, so expand it here.
+    let cwd = cwd.filter(|c| !c.is_empty()).map(expand_tilde);
+
     // The PTY is blocking; run it on a separate thread so the runtime isn't blocked.
-    let result = tokio::task::spawn_blocking(move || {
-        capture::run_command(&command, cwd.as_deref(), 240, 80, None)
-            .map(|out: RunOutcome| {
-                serde_json::to_value(&out.capture)
-                    .map_err(|e| capture::CaptureError(format!("IR serialization: {e}")))
-            })
-            .and_then(|v| v)
+    let stop = state.stop.clone();
+    let joined = tokio::task::spawn_blocking(move || {
+        capture::run_command(&command, cwd.as_deref(), 240, 80, Some(&*stop))
     })
-    .await
-    .map_err(|e| e.to_string())?;
+    .await;
+
+    // Reset on EVERY exit path (worker panic included) or the UI would be
+    // locked out of further captures.
     *state.running.lock().await = false;
-    result.map_err(|e: capture::CaptureError| e.0)
+
+    match joined {
+        Ok(Ok(out)) => Ok(CaptureResult {
+            capture: out.capture,
+            exit_code: out.exit_code,
+            truncated: out.truncated,
+            timed_out: out.timed_out,
+        }),
+        Ok(Err(e)) => Err(e.0),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Expands `~` and `~/...` against the home directory.
+fn expand_tilde(cwd: String) -> String {
+    let home = home_dir();
+    if home.is_empty() {
+        return cwd;
+    }
+    if cwd == "~" {
+        home
+    } else if let Some(rest) = cwd.strip_prefix("~/") {
+        format!("{home}/{rest}")
+    } else {
+        cwd
+    }
+}
+
+/// Home directory: HOME, falling back to USERPROFILE on Windows.
+fn home_dir() -> String {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -108,17 +165,28 @@ fn stop_capture(state: State<'_, AppState>) {
 
 /// Applies the redaction rules to commandLine and the text of every run.
 fn redact_capture_value(v: &mut serde_json::Value, r: &Redaction) {
-    if let Some(cl) = v.get_mut("commandLine").and_then(|c| c.as_str()) {
+    // The value always comes from serde (an object), but indexing `v[...]`
+    // panics on anything else: guard instead of trusting it.
+    let Some(obj) = v.as_object_mut() else {
+        return;
+    };
+    if let Some(cl) = obj.get_mut("commandLine").and_then(|c| c.as_str()) {
         let redacted = r.apply(cl);
-        v["commandLine"] = serde_json::Value::String(redacted);
+        obj.insert("commandLine".into(), serde_json::Value::String(redacted));
     }
-    if let Some(lines) = v.get_mut("lines").and_then(|l| l.as_array_mut()) {
+    if let Some(lines) = obj.get_mut("lines").and_then(|l| l.as_array_mut()) {
         for line in lines {
+            let Some(line) = line.as_object_mut() else {
+                continue;
+            };
             if let Some(runs) = line.get_mut("runs").and_then(|rr| rr.as_array_mut()) {
                 for run in runs {
+                    let Some(run) = run.as_object_mut() else {
+                        continue;
+                    };
                     if let Some(text) = run.get_mut("text").and_then(|t| t.as_str()) {
                         let redacted = r.apply(text);
-                        run["text"] = serde_json::Value::String(redacted);
+                        run.insert("text".into(), serde_json::Value::String(redacted));
                     }
                 }
             }
@@ -196,7 +264,7 @@ fn default_rules() -> Vec<redact::RedactRule> {
 
 #[tauri::command]
 fn get_home() -> String {
-    std::env::var("HOME").unwrap_or_default()
+    home_dir()
 }
 
 /// Opens a save dialog and writes the PNG (base64) to the chosen path.

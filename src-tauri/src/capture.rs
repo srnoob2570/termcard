@@ -39,6 +39,19 @@ pub fn run_command(
     rows: u16,
     stop: Option<&std::sync::atomic::AtomicBool>,
 ) -> Result<RunOutcome, CaptureError> {
+    run_command_inner(command, cwd, cols, rows, stop, TIMEOUT)
+}
+
+/// Same as `run_command` with an explicit timeout, so tests can exercise the
+/// timeout path without waiting `TIMEOUT` seconds.
+fn run_command_inner(
+    command: &str,
+    cwd: Option<&str>,
+    cols: u16,
+    rows: u16,
+    stop: Option<&std::sync::atomic::AtomicBool>,
+    timeout: Duration,
+) -> Result<RunOutcome, CaptureError> {
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -65,45 +78,79 @@ pub fn run_command(
         .map_err(|e| CaptureError(e.to_string()))?;
     drop(pair.slave); // The parent doesn't need the slave after the spawn.
 
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| CaptureError(e.to_string()))?;
+    // A blocking `reader.read` can hang forever on a silent process, which
+    // would defeat the deadline: a dedicated thread pushes read chunks over a
+    // channel and the main loop polls it with `recv_timeout`.
+    let (tx, rx) = std::sync::mpsc::channel::<std::io::Result<Vec<u8>>>();
+    let reader_handle = {
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| CaptureError(e.to_string()))?;
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break, // EOF: the process closed the PTY.
+                    Ok(n) => {
+                        if tx.send(Ok(buf[..n].to_vec())).is_err() {
+                            break; // Receiver dropped: stop reading.
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        let _ = tx.send(Err(e));
+                        break;
+                    }
+                }
+            }
+        })
+    };
 
-    let deadline = Instant::now() + TIMEOUT;
+    let deadline = Instant::now() + timeout;
+    // Upper bound per poll so the stop flag is checked even while blocked.
+    const STOP_POLL: Duration = Duration::from_millis(100);
     let mut raw: Vec<u8> = Vec::with_capacity(64 * 1024);
-    let mut buf = [0u8; 8192];
     let mut truncated = false;
     let mut timed_out = false;
+    let mut read_err: Option<CaptureError> = None;
 
     loop {
         if let Some(flag) = stop {
             if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                let _ = child.kill();
                 break;
             }
         }
-        if Instant::now() >= deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
             timed_out = true;
-            let _ = child.kill();
             break;
         }
-        match reader.read(&mut buf) {
-            Ok(0) => break, // EOF: the process closed the PTY.
-            Ok(n) => {
-                if raw.len() + n <= MAX_BUFFER {
-                    raw.extend_from_slice(&buf[..n]);
+        match rx.recv_timeout(remaining.min(STOP_POLL)) {
+            Ok(Ok(chunk)) => {
+                if raw.len() + chunk.len() <= MAX_BUFFER {
+                    raw.extend_from_slice(&chunk);
                 } else {
                     let room = MAX_BUFFER - raw.len();
-                    raw.extend_from_slice(&buf[..room]);
+                    raw.extend_from_slice(&chunk[..room]);
                     truncated = true;
-                    let _ = child.kill();
                     break;
                 }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(CaptureError(e.to_string())),
+            Ok(Err(e)) => {
+                read_err = Some(CaptureError(e.to_string()));
+                break;
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break, // EOF
         }
+    }
+
+    // Kill first: closing the PTY unblocks the reader thread's pending read.
+    let _ = child.kill();
+    let _ = reader_handle.join();
+    if let Some(e) = read_err {
+        return Err(e);
     }
 
     let exit_code = child.wait().ok().map(|s| s.exit_code());
@@ -165,29 +212,34 @@ mod tests {
     #[test]
     fn stop_flag_kills_hanging_command() {
         let stop = std::sync::Arc::new(AtomicBool::new(false));
-        let stop_thread = stop.clone();
-        let handle = std::thread::spawn(move || {
-            // The main thread sets the flag after a delay; run_command checks it.
-            std::thread::sleep(Duration::from_millis(150));
-            stop_thread.store(true, std::sync::atomic::Ordering::Relaxed);
-            run_command("sleep 60", None, 80, 24, Some(&stop)).unwrap()
+        let flag = stop.clone();
+        let setter = std::thread::spawn(move || {
+            // Set the flag AFTER run_command has started, like the Stop button.
+            std::thread::sleep(Duration::from_millis(300));
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
         });
-        let out = handle.join().unwrap();
-        assert!(out.exit_code.is_none() || out.capture.lines.iter().all(|l| l.runs.is_empty()));
+        let start = Instant::now();
+        run_command("sleep 30", None, 80, 24, Some(&stop)).unwrap();
+        setter.join().unwrap();
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "stop flag did not kill the command: {:?}",
+            start.elapsed()
+        );
     }
 
     #[test]
     fn timeout_kills_sleep() {
-        // We don't wait 120 s: we verify the mechanism with our own thread
-        // timeout; the hung command is left without a reader and the test dies fast.
-        let handle = std::thread::spawn(|| run_command("sleep 0.2; echo done", None, 80, 24, None));
-        let out = handle.join().unwrap().unwrap();
-        assert!(out
-            .capture
-            .lines
-            .iter()
-            .any(|l| l.runs.iter().any(|r| r.text.contains("done"))));
+        // Exercise the real timeout path with a short deadline instead of
+        // waiting `TIMEOUT` seconds for `sleep 5`.
+        let start = Instant::now();
+        let out =
+            run_command_inner("sleep 5", None, 80, 24, None, Duration::from_millis(300)).unwrap();
+        let elapsed = start.elapsed();
+        assert!(out.timed_out, "expected timed_out = true");
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "timeout did not kill the command: {elapsed:?}"
+        );
     }
-
-    fn _assert_stop_type(_: &AtomicBool) {}
 }

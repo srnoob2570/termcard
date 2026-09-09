@@ -125,7 +125,9 @@ pub struct Palette {
 
 impl Default for Palette {
     fn default() -> Self {
-        // Catppuccin Mocha by default; each preset brings its own.
+        // Catppuccin Mocha by default. ANSI-256 indexed colors are resolved
+        // against this default palette everywhere (both export commands
+        // hardcode it); per-preset palettes are not wired yet.
         Palette {
             normal: [
                 "#45475a".into(), // black
