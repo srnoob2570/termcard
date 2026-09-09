@@ -24,9 +24,11 @@ Prefs: hand-rolled once_store JSON blob at app_config_dir/termcard-store.json (o
 - Blocking work always goes through `tokio::task::spawn_blocking` (capture) / `tauri::async_runtime::spawn_blocking` (render), guarded by `AppState { stop: Arc<AtomicBool>, running: tokio::sync::Mutex<bool> }` (single capture at a time, 5MB buffer cap, 120s timeout, stop flag kills the PTY).
 - `run_capture` takes `cwd: Option<String>`.
 
-Rust backend (`termcard_lib`, flat modules): `lib.rs` (10 `#[tauri::command]`s + `AppState` + `once_store`), `capture.rs` (PTY), `ir.rs` (Capture/Line/Run/Color, `from_vt100` with run merging, `Capture::trimmed`), `redact.rs` (regex rules + LazyLock cache), `theme.rs` (Theme + `Preset::theme()` as single source of truth, ANSI-256 `Palette`), `export.rs` (hand-built SVG with base64-embedded JetBrains Mono, `CH_WIDTH 0.6` / `LINE_HEIGHT 1.2`, + resvg PNG).
+Rust backend (`termcard_lib`, flat modules): `lib.rs` (11 `#[tauri::command]`s + `AppState` + `once_store`), `capture.rs` (PTY), `ir.rs` (Capture/Line/Run/Color, `from_vt100` with run merging, `Capture::trimmed`), `redact.rs` (regex rules + LazyLock cache), `theme.rs` (Theme + `Preset::theme()` as single source of truth, ANSI-256 `Palette`), `export.rs` (hand-built SVG, `CH_WIDTH 0.6` / `LINE_HEIGHT 1.2`, + resvg PNG).
 
-Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (10 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings are English; the frontend wraps them (`Error: {detail}`).
+Preview fonts: `export::render_svg` emits `font-family="JetBrains Mono"` only — no embedded `@font-face`. The frontend installs the CSS once at document level via the `font_css` command (`export::font_css`, ~1.4 MB base64) in a startup `<style>` tag. Per-render embedding shipped the payload inside every preview SVG and made each keystroke re-parse it (measured: ~half the keystroke latency). `render_png` resolves fonts through `fontdb` and never embeds.
+
+Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (11 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings are English; the frontend wraps them (`Error: {detail}`).
 
 ## Key Directories
 
@@ -73,7 +75,7 @@ cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
 - shadcn/ui on `@base-ui/react` (style `base-nova` per `components.json`), cva, lucide-react icons, `data-slot` attributes. Tailwind v4 CSS-first (`@theme inline`, oklch vars, `@custom-variant dark`); app is dark-only (hardcoded `class="dark"` in `index.html`).
 - SVG imports: `*.svg?raw` typed in `src/vite-env.d.ts` (used for the GitHub mark in `src/assets/`).
 
-**Cross-boundary contract**: adding an IPC command touches `lib.rs` (command + `generate_handler![]`) and `api.ts` (struct mirror + invoke wrapper). Missing either side fails `tsc` or the runtime invoke. Current 10 commands: `get_prefs`, `save_prefs`, `run_capture`, `stop_capture`, `export_png`, `export_svg`, `preset_theme`, `default_rules`, `get_home`, `save_png`.
+**Cross-boundary contract**: adding an IPC command touches `lib.rs` (command + `generate_handler![]`) and `api.ts` (struct mirror + invoke wrapper). Missing either side fails `tsc` or the runtime invoke. Current 11 commands: `get_prefs`, `save_prefs`, `run_capture`, `stop_capture`, `export_png`, `export_svg`, `font_css`, `preset_theme`, `default_rules`, `get_home`, `save_png`.
 
 ## Important Files
 

@@ -110,6 +110,7 @@ export const api = {
         rules: RedactRule[],
         showRaw: boolean
     ): Promise<string> => invoke("export_svg", { capture, theme, rules, showRaw }),
+    fontCss: (): Promise<string> => invoke("font_css"),
     presetTheme: (preset: string): Promise<Theme> => invoke("preset_theme", { preset }),
     defaultRules: (): Promise<RedactRule[]> => invoke("default_rules"),
     getHome: (): Promise<string> => invoke("get_home"),

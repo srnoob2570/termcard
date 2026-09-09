@@ -81,6 +81,23 @@ export default function App() {
         [prefs.lang]
     );
 
+    // Preview fonts: the SVG carries `font-family: 'JetBrains Mono'` only.
+    // The @font-face payload (~1.4 MB base64) is installed ONCE at document
+    // level; embedding it per render made every keystroke re-parse the blob.
+    useEffect(() => {
+        void api
+            .fontCss()
+            .then((css) => {
+                const style = document.createElement("style");
+                style.textContent = css;
+                document.head.appendChild(style);
+            })
+            .catch(() => {
+                // Without the face the preview falls back to a local
+                // monospace font: cosmetic, not a failure.
+            });
+    }, []);
+
     // ---- init ----
     useEffect(() => {
         void (async () => {

@@ -247,6 +247,17 @@ async fn export_svg(
     .map_err(|e| format!("export cancelled: {e}"))?
 }
 
+/// Document-level `@font-face` CSS for the preview fonts. The frontend
+/// injects it into `document.head` ONCE at startup; every preview SVG
+/// resolves `font-family: 'JetBrains Mono'` through it. Embedding the
+/// ~1.4 MB base64 payload inside each preview SVG made every theme/rules
+/// keystroke re-parse the whole blob (measured: ~35 ms of the ~70 ms
+/// keystroke latency at 4x CPU slowdown).
+#[tauri::command]
+fn font_css() -> String {
+    export::font_css()
+}
+
 /// Full theme of a preset. The frontend replaces its whole theme when
 /// switching presets: partial overrides left leftovers of the previous one.
 #[tauri::command]
@@ -323,6 +334,7 @@ pub fn run() {
             stop_capture,
             export_png,
             export_svg,
+            font_css,
             preset_theme,
             default_rules,
             get_home,

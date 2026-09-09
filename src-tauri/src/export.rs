@@ -66,21 +66,19 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     Layout { width, height }
 }
 
-/// Renders the full SVG of the card. `scale` multiplies dimensions.
+/// Renders the card SVG WITHOUT embedded fonts. The preview displays this:
+/// the browser resolves `font-family: 'JetBrains Mono'` through the
+/// document-level `@font-face` the frontend installs once (`font_css`).
+/// Embedding per render would ship ~1.4 MB of base64 per keystroke and make
+/// the webview re-parse it on every preview swap.
+///
+/// `export_svg` (this same string) is not written to a file by the app, so
+/// no embedding path is needed here; `render_png` rasterizes with `fontdb`.
 pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u32) -> String {
-    render_svg_inner(capture, theme, palette, scale, true)
+    render_svg_inner(capture, theme, palette, scale)
 }
 
-/// `embed_fonts` toggles the `@font-face` CSS: it is only needed by browsers
-/// (the preview). resvg resolves fonts through `fontdb` (see `render_png`),
-/// so the PNG path skips ~1.5 MB of dead base64 CSS.
-fn render_svg_inner(
-    capture: &Capture,
-    theme: &Theme,
-    palette: &Palette,
-    scale: u32,
-    embed_fonts: bool,
-) -> String {
+fn render_svg_inner(capture: &Capture, theme: &Theme, palette: &Palette, scale: u32) -> String {
     let layout = layout(capture, theme);
     let w = layout.width * scale as f32;
     let h = layout.height * scale as f32;
@@ -106,9 +104,6 @@ fn render_svg_inner(
     svg.push_str(&format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">"#
     ));
-    if embed_fonts {
-        svg.push_str(&font_defs());
-    }
     svg.push_str(&format!(
         r#"<defs><clipPath id="win"><rect x="{xi}" y="{yi}" width="{ww}" height="{wh}" rx="{radius}"/></clipPath></defs>"#,
         xi = win_inset,
@@ -282,16 +277,21 @@ static FONT_B64: LazyLock<[String; 4]> = LazyLock::new(|| {
     ]
 });
 
-fn font_defs() -> String {
+/// Document-level `@font-face` CSS for the preview: installed ONCE by the
+/// frontend (a `<style>` in `document.head`), never re-sent per render. The
+/// per-render `@font-face` block (~1.4 MB of base64) made every theme/rules
+/// keystroke re-parse the whole payload; the document-level face applies to
+/// every preview SVG through the same `font-family` reference.
+pub fn font_css() -> String {
+    let [regular, bold, italic, bold_italic] = &*FONT_B64;
     let face = |b64: &str, weight: &str, style: &str| {
         format!(
             r#"@font-face {{ font-family: '{}'; font-weight: {weight}; font-style: {style}; src: url(data:font/ttf;base64,{b64}) format('truetype'); }}"#,
             font_family(),
         )
     };
-    let [regular, bold, italic, bold_italic] = &*FONT_B64;
     format!(
-        r#"<defs><style>{} {} {} {}</style></defs>"#,
+        "{} {} {} {}",
         face(regular, "normal", "normal"),
         face(bold, "bold", "normal"),
         face(italic, "normal", "italic"),
@@ -316,8 +316,8 @@ pub fn render_png(
     palette: &Palette,
     scale: u32,
 ) -> Result<Vec<u8>, String> {
-    // Fonts come from `fontdb` below; the @font-face CSS is browser-only.
-    let svg = render_svg_inner(capture, theme, palette, scale, false);
+    // Fonts come from `fontdb` below; the SVG never carries embedded faces.
+    let svg = render_svg_inner(capture, theme, palette, scale);
 
     let mut fontdb = fontdb::Database::new();
     let f = &*FONTS;
