@@ -8,6 +8,9 @@ use vt100::Color as VtColor;
 pub enum Color {
     Indexed(u8),
     Rgb(u8, u8, u8),
+    /// Not produced by `from_vt100` (a default fg serializes as `None` on
+    /// runs); kept for round-trip deserialization of captures saved by
+    /// older versions of the app.
     Default,
     DefaultInverted,
 }
@@ -54,7 +57,9 @@ impl Line {
 ///
 /// Walks cell by cell (`Screen::cell` is the only public access),
 /// skips wide-character continuations and merges contiguous cells
-/// with identical style into a single run.
+/// with identical style into a single run. Gaps of unwritten cells
+/// between written cells (tabs, cursor movement) are preserved as
+/// literal spaces styled with the gap cell's own attributes.
 pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
     let screen = parser.screen();
     let (rows, cols) = screen.size();
@@ -62,6 +67,7 @@ pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
 
     for row in 0..rows {
         let mut runs: Vec<Run> = Vec::new();
+        let mut last_col: Option<u16> = None;
         for col in 0..cols {
             let Some(cell) = screen.cell(row, col) else {
                 continue;
@@ -69,16 +75,22 @@ pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
             if !cell.has_contents() || cell.is_wide_continuation() {
                 continue;
             }
-            let (fg, bg) = convert_colors(cell.fgcolor(), cell.bgcolor(), cell.inverse());
-            let run = Run {
-                text: cell.contents().to_string(),
-                fg,
-                bg,
-                bold: cell.bold(),
-                italic: cell.italic(),
-                underline: cell.underline(),
-            };
-            merge_run(&mut runs, run);
+            // Preserve the gap of unwritten cells before this one as literal
+            // spaces (each carrying its cell's style), so cursor jumps don't
+            // glue the surrounding text together.
+            if let Some(prev) = last_col {
+                for gap_col in prev + 1..col {
+                    let Some(gap_cell) = screen.cell(row, gap_col) else {
+                        continue;
+                    };
+                    if gap_cell.is_wide_continuation() {
+                        continue;
+                    }
+                    merge_run(&mut runs, cell_run(gap_cell, " ".to_string()));
+                }
+            }
+            merge_run(&mut runs, cell_run(cell, cell.contents().to_string()));
+            last_col = Some(col);
         }
         lines.push(Line::from_runs(runs));
     }
@@ -105,14 +117,19 @@ impl Capture {
         let max_len = self
             .lines
             .iter()
-            .map(|l| l.runs.iter().map(|r| r.text.chars().count()).sum::<usize>())
-            .chain(std::iter::once(self.command_line.chars().count()))
+            .map(|l| l.runs.iter().map(|r| str_width(&r.text)).sum::<usize>())
+            .chain(std::iter::once(str_width(&self.command_line)))
             .max()
             .unwrap_or(1);
         self.cols = (max_len as u16 + 1).min(self.cols);
         self.rows = self.lines.len().min(usize::from(u16::MAX)) as u16;
         self
     }
+}
+
+/// Display width of a string in terminal columns (wide CJK chars count 2).
+pub fn str_width(s: &str) -> usize {
+    unicode_width::UnicodeWidthStr::width(s)
 }
 
 /// Maps vt100 colors to the IR. With reverse video, foreground and background
@@ -132,6 +149,19 @@ fn to_color(c: VtColor, inverted: bool) -> Option<Color> {
         VtColor::Default => None,
         VtColor::Idx(i) => Some(Color::Indexed(i)),
         VtColor::Rgb(r, g, b) => Some(Color::Rgb(r, g, b)),
+    }
+}
+
+/// Builds a run from a cell's contents and its converted style.
+fn cell_run(cell: &vt100::Cell, text: String) -> Run {
+    let (fg, bg) = convert_colors(cell.fgcolor(), cell.bgcolor(), cell.inverse());
+    Run {
+        text,
+        fg,
+        bg,
+        bold: cell.bold(),
+        italic: cell.italic(),
+        underline: cell.underline(),
     }
 }
 
@@ -228,5 +258,38 @@ mod tests {
         let p = parse(b"out\n", 24, 80);
         let cap = from_vt100(&p, "ls -la".into());
         assert_eq!(cap.command_line, "ls -la");
+    }
+
+    #[test]
+    fn tab_gap_preserved() {
+        let p = parse(b"a\tb\n", 24, 80);
+        let cap = from_vt100(&p, "cmd".into());
+        let joined = cap.lines[0]
+            .runs
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<String>();
+        // Tab moves the cursor to column 8: 'b' lands after 7 blank columns.
+        assert_eq!(joined, format!("a{}b", " ".repeat(7)));
+        assert!(cap.lines[0].runs.len() >= 1);
+    }
+
+    #[test]
+    fn trimmed_counts_wide_char_width() {
+        let cap = Capture {
+            cols: 80,
+            rows: 1,
+            command_line: "x".into(),
+            lines: vec![Line::from_runs(vec![Run {
+                text: "你好".into(),
+                fg: None,
+                bg: None,
+                bold: false,
+                italic: false,
+                underline: false,
+            }])],
+        };
+        // Two CJK chars occupy 4 columns, plus 1 => 5 (not 3 by char count).
+        assert_eq!(cap.trimmed().cols, 5);
     }
 }
