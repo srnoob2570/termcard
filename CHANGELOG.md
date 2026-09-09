@@ -18,4 +18,11 @@ First release.
 - Colors, emoji, and tab-aligned columns captured faithfully (`TERM=xterm-256color`, `COLORTERM=truecolor`, display-width-aware run merging).
 - Save dialog for PNG exports, with the file written by the Rust backend.
 
-**Full changelog:** https://github.com/srnoob2570/termcard/commits/v0.1.0
+## [0.1.1] - 2026-09-09
+
+### Fixed
+
+- Removed the drop-shadow filter from the preview SVG, which rendered the card as a black box in the WebKitGTK webview (Tauri on Linux).
+- Input fields no longer trigger autocapitalization, autocorrect, spellcheck, or grammar tools.
+
+**Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.0...v0.1.1
