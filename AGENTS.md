@@ -47,7 +47,7 @@ bun run dev        # web-only Vite dev server (no Tauri shell), port 1420 strict
 bun run build      # tsc && vite build — tsc IS the typecheck gate
 bun run preview    # serve production build
 bun run tauri build # release bundle (.deb/AppImage)
-cd src-tauri && cargo test   # 33 tests (31 inline + 2 in export_probe.rs)
+cd src-tauri && cargo test   # 37 tests (35 inline + 2 in export_probe.rs)
 ```
 
 - Plain `bun run tauri dev` fails: `bun run app` exists precisely to prepend `~/.cargo/bin`.
@@ -62,14 +62,14 @@ cd src-tauri && cargo test   # 33 tests (31 inline + 2 in export_probe.rs)
 - State: `.manage(AppState { stop, running })`; `LazyLock` statics for fonts and regex cache; blocking work under `spawn_blocking`.
 - Redaction mutates the serialized `serde_json::Value` directly (`redact_capture_value` in `lib.rs`) rather than round-tripping through structs.
 - Comments, doc comments, assert messages, and backend error strings: English. Keep it consistent. User-facing UI strings go through `src/i18n.ts` in both languages.
-- Persistence is the hand-rolled `once_store` module (`OnceLock<PathBuf>`, whole-JSON `get_prefs`/`save_prefs`). `tauri-plugin-store` is still in `Cargo.toml` but unused — don't add plugin-store calls. Same for `@tauri-apps/plugin-dialog`: Rust opens the save dialog itself via `AppHandle`.
+- Persistence is the hand-rolled `once_store` module (`OnceLock<PathBuf>`, whole-JSON `get_prefs`/`save_prefs`, atomic write via tmp+rename). `tauri-plugin-store` was removed from `Cargo.toml` and the `@tauri-apps/plugin-store`/`@tauri-apps/plugin-dialog` JS packages from `package.json` — don't add plugin-store calls. The Rust `tauri-plugin-dialog` crate stays: Rust opens the save dialog itself via `AppHandle`.
 - `[lib] name = "termcard_lib"`: the `_lib` suffix avoids a lib/bin name collision (Windows cargo issue); don't rename.
 
 **TypeScript/React**
 
 - Strict TS, `noUnusedLocals`/`noUnusedParameters`, `noFallthroughCasesInSwitch`, `allowImportingTsExtensions`. Path alias `@` → `./src` (declared in **both** `tsconfig.json` and `vite.config.ts` — update both).
 - Imports use `@/api`, `@/components/ui/button`.
-- State: plain `useState` + `useCallback`. Persistence pattern: `patchPrefs`/`patchTheme` shallow-merge state and fire `void api.savePrefs(next)` inside the updater (fire-and-forget). Init: `getPrefs`; if the saved object has `command`, merge over `DEFAULT_PREFS` (theme merged keywise) and fill empty rules from `defaultRules()`; otherwise `defaultPrefs(getHome(), defaultRules())`.
+- State: plain `useState` + `useCallback`. Persistence pattern: `patchPrefs`/`patchTheme` shallow-merge state only; a `useEffect` on the prefs state persists with `void api.savePrefs(next)` (fire-and-forget, StrictMode-safe identity check, no save on first mount). Init: `getPrefs`; if the saved object has `command`, merge over `DEFAULT_PREFS` (theme merged keywise) and fill empty rules from `defaultRules()` (also as fallback if `getPrefs` fails); otherwise `defaultPrefs(getHome(), defaultRules())`.
 - `src/lib/utils.ts` is `export { cn } from "cn"` — `cn` is an npm package, not the usual clsx + tailwind-merge combo.
 - shadcn/ui on `@base-ui/react` (style `base-nova` per `components.json`), cva, lucide-react icons, `data-slot` attributes. Tailwind v4 CSS-first (`@theme inline`, oklch vars, `@custom-variant dark`); app is dark-only (hardcoded `class="dark"` in `index.html`).
 - SVG imports: `*.svg?raw` typed in `src/vite-env.d.ts` (used for the GitHub mark in `src/assets/`).
@@ -94,7 +94,7 @@ cd src-tauri && cargo test   # 33 tests (31 inline + 2 in export_probe.rs)
 
 ## Testing & QA
 
-- Rust-only suite, 33 tests: 31 inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 8, redact 7, theme 7, export 3) + 2 in `tests/export_probe.rs`. No frontend tests, no coverage tooling.
+- Rust-only suite, 37 tests: 35 inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 3) + 2 in `tests/export_probe.rs`. No frontend tests, no coverage tooling.
 - Naming: snake_case behavioral names (`svg_escapes_xml`, `disabled_rules_skipped`). Fixtures are in-module helper functions, not files.
 - `capture.rs` tests are **not hermetic**: they spawn real shell commands and depend on PATH, GNU `ls --color=always`, and `/tmp`. `stop_flag_kills_hanging_command` is the slowest/flakiest (150ms timing race, spawns `sleep 60`).
 - Husky pre-commit (`.husky/pre-commit`): `bunx lint-staged` (prettier on web files, rustfmt on `src-tauri/**/*.rs`) **and** `cd src-tauri && cargo fmt --check && cargo test` — every commit runs the full Rust suite and needs cargo on PATH.
