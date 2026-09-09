@@ -2,6 +2,19 @@
 
 All notable changes to termcard are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-09-09
+
+### Added
+
+- Card width setting: automatic (fits the longest line) or manual, a fixed card width in px (defaults to 160 when switching to manual). Applies to preview and PNG/SVG exports alike; a manual width below the content lets text overflow until the command is re-captured.
+
+### Fixed
+
+- The width input is now free-text: clearing the field no longer snaps back to 160 mid-edit, and values are committed on blur/Enter with clamping to the valid range.
+- The version label in the sidebar reads the version from `package.json` at build time instead of a hardcoded string, so it can no longer drift from the released version.
+
+**Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.1...v0.1.2
+
 ## [0.1.0] - 2026-09-09
 
 First release.

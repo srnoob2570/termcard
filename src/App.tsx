@@ -659,11 +659,10 @@ export default function App() {
                         className="inline-flex h-6 items-center gap-1.5 rounded-4xl border border-border bg-secondary px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
                     >
                         <GithubIcon />
-                        <span className="font-mono">v0.1</span>
+                        <span className="font-mono">v0.1.2</span>
                     </a>
                 </div>
             </aside>
-
             <div className="flex min-w-0 flex-1 flex-col">
                 <div className="flex items-center gap-2 border-b px-4 py-2.5">
                     <Label className="text-xs">{msg("labelScale")}</Label>
