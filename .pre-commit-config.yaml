@@ -1,0 +1,30 @@
+repos:
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v6.0.0
+      hooks:
+          - id: trailing-whitespace
+          - id: end-of-file-fixer
+    - repo: local
+      hooks:
+          - id: prettier
+            name: prettier
+            entry: bunx prettier --write
+            language: system
+            files: '\.(ts|tsx|js|jsx|css|json|md|html)$'
+          - id: rustfmt
+            name: rustfmt
+            entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec rustfmt --edition 2021 "$@"' bash
+            language: system
+            files: '\.rs$'
+          - id: cargo-fmt-check
+            name: cargo fmt --check
+            entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; cd src-tauri && cargo fmt --check' bash
+            language: system
+            pass_filenames: false
+            always_run: true
+          - id: cargo-test
+            name: cargo test
+            entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; cd src-tauri && cargo test' bash
+            language: system
+            pass_filenames: false
+            always_run: true

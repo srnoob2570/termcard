@@ -1,2 +1,0 @@
-bunx lint-staged
-cd src-tauri && cargo fmt --check && cargo test

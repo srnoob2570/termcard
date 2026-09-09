@@ -9,7 +9,7 @@
         "build": "tsc && vite build",
         "preview": "vite preview",
         "tauri": "tauri",
-        "prepare": "husky"
+        "prepare": "pre-commit install || true"
     },
     "dependencies": {
         "@base-ui/react": "^1.8.0",
@@ -30,8 +30,6 @@
         "@types/react": "^19.2.18",
         "@types/react-dom": "^19.2.7",
         "@vitejs/plugin-react": "^6.1.1",
-        "husky": "^9.1.7",
-        "lint-staged": "^17.5.0",
         "prettier": "^3.9.6",
         "shadcn": "^4.21.0",
         "tailwindcss": "^4.3.3",

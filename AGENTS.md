@@ -96,7 +96,7 @@ cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
 - Rust-only suite, 35 tests, all inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 3). No frontend tests, no coverage tooling.
 - Naming: snake_case behavioral names (`svg_escapes_xml`, `disabled_rules_skipped`). Fixtures are in-module helper functions, not files.
 - `capture.rs` tests are **not hermetic**: they spawn real shell commands and depend on PATH, GNU `ls --color=always`, and `/tmp`. `stop_flag_kills_hanging_command` is the slowest/flakiest (150ms timing race, spawns `sleep 60`).
-- Husky pre-commit (`.husky/pre-commit`): `bunx lint-staged` (prettier on web files, rustfmt on `src-tauri/**/*.rs`) **and** `cd src-tauri && cargo fmt --check && cargo test` — every commit runs the full Rust suite and needs cargo on PATH.
+- pre-commit framework (`.pre-commit-config.yaml`, installed via `pre-commit install` — `package.json` `prepare` does it when the binary is on PATH): `end-of-file-fixer` (final newline on every file), prettier (web files), rustfmt + `cargo fmt --check` + `cargo test` (Rust; PATH export prepends `~/.cargo/bin`). Local hooks, no stale mirror repos. Global pass: `pre-commit run --all-files`.
 - Known invariants to keep in sync:
     - Theme defaults are duplicated: `Theme::default` (theme.rs) and `DEFAULT_PREFS` (api.ts). Change both.
     - Preset definitions live in `theme.rs::Preset::theme` only; `App.tsx::PRESET_LABELS` holds display labels.
