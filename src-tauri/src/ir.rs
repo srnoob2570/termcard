@@ -91,6 +91,30 @@ pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
     }
 }
 
+impl Capture {
+    /// Recorta la captura al contenido: elimina filas vacías finales y
+    /// ajusta `cols` al ancho real del contenido. `rows` queda con las
+    /// filas con contenido.
+    pub fn trimmed(mut self) -> Self {
+        let last_content = self
+            .lines
+            .iter()
+            .rposition(|l| !l.runs.is_empty())
+            .map_or(0, |i| i + 1);
+        self.lines.truncate(last_content);
+        let max_len = self
+            .lines
+            .iter()
+            .map(|l| l.runs.iter().map(|r| r.text.chars().count()).sum::<usize>())
+            .chain(std::iter::once(self.command_line.chars().count()))
+            .max()
+            .unwrap_or(1);
+        self.cols = (max_len as u16 + 1).min(self.cols);
+        self.rows = self.lines.len().min(usize::from(u16::MAX)) as u16;
+        self
+    }
+}
+
 /// Mapea los colores vt100 al IR. Con video inverso, primer plano y fondo
 /// se intercambian; `Default` invertido se representa con `DefaultInverted`
 /// para que ambos renderizadores lo resuelvan contra el tema.

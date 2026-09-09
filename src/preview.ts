@@ -71,8 +71,6 @@ export function defaultPrefs(cwd: string, rules: Prefs["rules"]): Prefs {
   return {
     command: "",
     cwd,
-    cols: 100,
-    rows: 30,
     rules,
     theme: defaultTheme(),
     scale: 2,

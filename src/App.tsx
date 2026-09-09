@@ -195,13 +195,7 @@ export default function App() {
     setRunning(true);
     setStatus("Ejecutando…");
     try {
-      const cap = await api.runCapture(
-        prefs.command,
-        prefs.cwd,
-        prefs.cols,
-        prefs.rows,
-        prefs.rules,
-      );
+      const cap = await api.runCapture(prefs.command, prefs.cwd, prefs.rules);
       setCapture(cap);
       const n = cap.lines.filter((l) => l.runs.length > 0).length;
       setStatus(`Captura lista: ${n} líneas con contenido.`);
@@ -303,36 +297,6 @@ export default function App() {
                 onChange={(e) => patchPrefs({ cwd: e.target.value })}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field>
-                <FieldLabel htmlFor="cols" className="text-xs">
-                  Columnas
-                </FieldLabel>
-                <Input
-                  id="cols"
-                  type="number"
-                  className="h-8"
-                  min={20}
-                  max={300}
-                  value={prefs.cols}
-                  onChange={(e) => patchPrefs({ cols: Number(e.target.value) || 100 })}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="rows" className="text-xs">
-                  Filas
-                </FieldLabel>
-                <Input
-                  id="rows"
-                  type="number"
-                  className="h-8"
-                  min={5}
-                  max={100}
-                  value={prefs.rows}
-                  onChange={(e) => patchPrefs({ rows: Number(e.target.value) || 30 })}
-                />
-              </Field>
-            </div>
           </FieldGroup>
           <div className="mt-3 flex gap-2">
             <Button onClick={() => void run()} disabled={running} className="flex-1">

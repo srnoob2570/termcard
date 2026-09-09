@@ -48,9 +48,16 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
         16.0
     };
     let pad = theme.padding as f32;
-    let cols_f = f32::from(capture.cols);
-    let width = (pad + cols_f * theme.font_size as f32 * CH_WIDTH + pad).max(420.0);
-    let height = pad + chrome + line_h * visible as f32 + pad;
+    // Ancho automático: línea más larga (incluido el prompt) + padding.
+    let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
+    let longest = capture
+        .visible_lines()
+        .map(|l| l.runs.iter().map(|r| r.text.chars().count()).sum::<usize>())
+        .chain(std::iter::once(prompt_len))
+        .max()
+        .unwrap_or(20) as f32;
+    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad).max(420.0);
+    let height = (pad + chrome + line_h * visible as f32 + pad).max(160.0);
     Layout { width, height }
 }
 
@@ -286,6 +293,7 @@ pub fn render_png(
 
     let opt = usvg::Options {
         font_family: font_family().to_string(),
+        fontdb: std::sync::Arc::new(fontdb),
         ..Default::default()
     };
     let tree = usvg::Tree::from_str(&svg, &opt).map_err(|e| format!("SVG inválido: {e}"))?;

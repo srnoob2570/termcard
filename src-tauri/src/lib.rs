@@ -72,8 +72,6 @@ async fn run_capture(
     state: State<'_, AppState>,
     command: String,
     cwd: Option<String>,
-    cols: u16,
-    rows: u16,
     rules: Vec<redact::RedactRule>,
 ) -> Result<serde_json::Value, String> {
     {
@@ -90,7 +88,7 @@ async fn run_capture(
 
     // La PTY es bloqueante; correr en hilo aparte para no bloquear el runtime.
     let result = tokio::task::spawn_blocking(move || {
-        capture::run_command(&command, cwd.as_deref(), cols, rows, None)
+        capture::run_command(&command, cwd.as_deref(), 240, 80, None)
             .map(|out: RunOutcome| {
             serde_json::to_value(&out.capture)
                 .map_err(|e| capture::CaptureError(format!("serialización IR: {e}")))

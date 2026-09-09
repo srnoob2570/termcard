@@ -51,8 +51,6 @@ export interface Theme {
 export interface Prefs {
   command: string;
   cwd: string;
-  cols: number;
-  rows: number;
   rules: RedactRule[];
   theme: Theme;
   scale: number;
@@ -62,8 +60,6 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = {
   command: "",
   cwd: "",
-  cols: 100,
-  rows: 30,
   rules: [],
   theme: {
     preset: "mac-dark",
@@ -89,11 +85,9 @@ export const api = {
   runCapture: (
     command: string,
     cwd: string,
-    cols: number,
-    rows: number,
     rules: RedactRule[],
   ): Promise<Capture> =>
-    invoke("run_capture", { command, cwd, cols, rows, rules }),
+    invoke("run_capture", { command, cwd, rules }),
   stopCapture: (): Promise<void> => invoke("stop_capture"),
   exportPng: (
     capture: Capture,

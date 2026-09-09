@@ -110,7 +110,7 @@ pub fn run_command(
 
     let mut parser = vt100::Parser::new(rows, cols, 0);
     parser.process(&raw);
-    let capture = ir::from_vt100(&parser, command.to_string());
+    let capture = ir::from_vt100(&parser, command.to_string()).trimmed();
 
     Ok(RunOutcome {
         capture,
