@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
     Camera,
     Download,
@@ -88,6 +89,9 @@ export default function App() {
     // ---- init ----
     useEffect(() => {
         void (async () => {
+            // L2: `msg` is captured from the first render (detected lang);
+            // status messages here use the RESOLVED language instead.
+            let lang = DEFAULT_PREFS.lang;
             try {
                 const saved = await api.getPrefs();
                 let next = DEFAULT_PREFS;
@@ -106,12 +110,21 @@ export default function App() {
                 } else {
                     next = defaultPrefs(await api.getHome(), await api.defaultRules());
                 }
+                lang = next.lang;
                 setPrefs(next);
             } catch {
-                setStatus(msg("statusPrefsError"), true);
+                setStatus(translate(lang, "statusPrefsError"), true);
+                // M5: without the store the rules list is empty, so previews
+                // would render unredacted; fall back to the default rules.
+                try {
+                    const rules = await api.defaultRules();
+                    setPrefs((p) => ({ ...p, rules }));
+                } catch {
+                    // No rules either: the warning above still shows.
+                }
             } finally {
                 setReady(true);
-                setStatus(msg("statusReady"));
+                setStatus(translate(lang, "statusReady"));
             }
         })();
     }, []);
@@ -140,20 +153,23 @@ export default function App() {
     }, [capture, prefs.theme, prefs.rules, prefs.uncensored]);
 
     const patchPrefs = useCallback((patch: Partial<Prefs>) => {
-        setPrefs((p) => {
-            const next = { ...p, ...patch };
-            void api.savePrefs(next);
-            return next;
-        });
+        setPrefs((p) => ({ ...p, ...patch }));
     }, []);
 
     const patchTheme = useCallback((patch: Partial<Theme>) => {
-        setPrefs((p) => {
-            const next = { ...p, theme: { ...p.theme, ...patch } };
-            void api.savePrefs(next);
-            return next;
-        });
+        setPrefs((p) => ({ ...p, theme: { ...p.theme, ...patch } }));
     }, []);
+
+    // Persistence (fire-and-forget) lives here, not inside the state updaters:
+    // StrictMode invokes updaters twice in dev, duplicating every IPC. Identity
+    // check against the last saved snapshot skips the initial mount AND the
+    // StrictMode remount without spuriously saving the defaults.
+    const savedPrefs = useRef<Prefs>(DEFAULT_PREFS);
+    useEffect(() => {
+        if (savedPrefs.current === prefs) return;
+        savedPrefs.current = prefs;
+        void api.savePrefs(prefs);
+    }, [prefs]);
 
     // ---- capture ----
     const run = useCallback(async () => {
@@ -164,11 +180,19 @@ export default function App() {
         }
         setRunning(true);
         setStatus(msg("statusRunning"));
+        // The "uncensored" toggle is temporary: only for the current preview.
+        if (prefs.uncensored) patchPrefs({ uncensored: false });
         try {
-            const cap = await api.runCapture(prefs.command, prefs.cwd);
-            setCapture(cap);
-            const n = cap.lines.filter((l) => l.runs.length > 0).length;
-            setStatus(msg("statusCaptureDone", { n }));
+            const res = await api.runCapture(prefs.command, prefs.cwd);
+            setCapture(res.capture);
+            const n = res.capture.lines.filter((l) => l.runs.length > 0).length;
+            let done = msg("statusCaptureDone", { n });
+            if (res.truncated) done += ` · ${msg("statusTruncated")}`;
+            if (res.timedOut) done += ` · ${msg("statusTimedOut")}`;
+            if (res.exitCode !== null && res.exitCode !== 0) {
+                done += ` · ${msg("statusExitCode", { n: res.exitCode })}`;
+            }
+            setStatus(done);
         } catch (e) {
             setStatus(msg("statusError", { detail: String(e) }), true);
         } finally {
@@ -284,7 +308,7 @@ export default function App() {
                             <Input
                                 id="cwd"
                                 className="h-8 font-mono text-xs"
-                                placeholder="~"
+                                placeholder="~/"
                                 value={prefs.cwd}
                                 onChange={(e) => patchPrefs({ cwd: e.target.value })}
                             />
@@ -557,6 +581,11 @@ export default function App() {
                         href="https://github.com/srnoob2570/termcard"
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(e) => {
+                            // target="_blank" is unreliable inside the webview.
+                            e.preventDefault();
+                            void openUrl("https://github.com/srnoob2570/termcard");
+                        }}
                         title={msg("githubTitle")}
                         className="inline-flex h-6 items-center gap-1.5 rounded-4xl border border-border bg-secondary px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
                     >

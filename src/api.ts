@@ -24,6 +24,14 @@ export interface Capture {
 export type Color =
     { indexed: number } | { rgb: [number, number, number] } | "default" | "defaultInverted";
 
+/** Result of `run_capture`: the unredacted capture plus process outcome flags. */
+export interface CaptureResult {
+    capture: Capture;
+    exitCode: number | null;
+    truncated: boolean;
+    timedOut: boolean;
+}
+
 export interface RedactRule {
     pattern: string;
     replacement: string;
@@ -87,8 +95,8 @@ export const DEFAULT_PREFS: Prefs = {
 export const api = {
     getPrefs: (): Promise<Prefs> => invoke("get_prefs"),
     savePrefs: (prefs: Prefs): Promise<void> => invoke("save_prefs", { prefs }),
-    runCapture: (command: string, cwd: string): Promise<Capture> =>
-        invoke("run_capture", { command, cwd }),
+    runCapture: (command: string, cwd: string): Promise<CaptureResult> =>
+        invoke("run_capture", { command, cwd: cwd || null }),
     stopCapture: (): Promise<void> => invoke("stop_capture"),
     exportPng: (
         capture: Capture,
