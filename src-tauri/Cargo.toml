@@ -33,6 +33,7 @@ tauri-plugin-store = "2.4.4"
 base64 = "0.23.1"
 parking_lot = "0.12.5"
 fontdb = "0.24.0"
+tokio = { version = "1.53.1", features = ["rt", "macros"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
