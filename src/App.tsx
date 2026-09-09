@@ -449,7 +449,7 @@ export default function App() {
               onChange={(e) => patchTheme({ title: e.target.value })}
             />
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-4 gap-2">
             <div>
               <Label className="text-xs">Fuente</Label>
               <Input
@@ -481,6 +481,17 @@ export default function App() {
                 max={80}
                 value={t.padding}
                 onChange={(e) => patchTheme({ padding: Number(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Margen</Label>
+              <Input
+                type="number"
+                className="mt-1 h-8"
+                min={0}
+                max={80}
+                value={t.outerMargin}
+                onChange={(e) => patchTheme({ outerMargin: Number(e.target.value) || 0 })}
               />
             </div>
           </div>
@@ -532,16 +543,17 @@ export default function App() {
 
         <div className="flex flex-1 items-start justify-center overflow-auto p-8 [background:repeating-conic-gradient(#1a1a24_0%_25%,#14141c_0%_50%)_0_0/24px_24px]">
           {capture ? (
-            <div
-              className="min-w-[420px] max-w-full overflow-hidden rounded-[var(--tc-radius)] font-mono leading-[1.2] shadow-[var(--tc-shadow)]"
-              style={{
-                ...cardVars(t),
-                background: t.background,
-                color: t.foreground,
-                borderRadius: t.cornerRadius,
-                fontSize: t.fontSize,
-              }}
-            >
+            <div style={{ padding: t.outerMargin }}>
+              <div
+                className="min-w-[420px] max-w-full overflow-hidden rounded-[var(--tc-radius)] font-mono leading-[1.2] shadow-[var(--tc-shadow)]"
+                style={{
+                  ...cardVars(t),
+                  background: t.background,
+                  color: t.foreground,
+                  borderRadius: t.cornerRadius,
+                  fontSize: t.fontSize,
+                }}
+              >
               {t.showTrafficLights && (
                 <div className="relative flex items-center px-[var(--tc-padding)] pt-3">
                   <div className="flex gap-2">
@@ -561,6 +573,7 @@ export default function App() {
                 className="px-[var(--tc-padding)] pb-[var(--tc-padding)] pt-3 whitespace-pre"
                 dangerouslySetInnerHTML={{ __html: body }}
               />
+              </div>
             </div>
           ) : (
             <Empty className="mt-16 border-none">

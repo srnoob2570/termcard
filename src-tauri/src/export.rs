@@ -48,6 +48,7 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
         16.0
     };
     let pad = theme.padding as f32;
+    let margin = theme.outer_margin as f32 * 2.0; // a cada lado
     // Ancho automático: línea más larga (incluido el prompt) + padding.
     let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
     let longest = capture
@@ -56,8 +57,8 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
         .chain(std::iter::once(prompt_len))
         .max()
         .unwrap_or(20) as f32;
-    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad).max(420.0);
-    let height = (pad + chrome + line_h * visible as f32 + pad).max(160.0);
+    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + margin).max(420.0);
+    let height = (pad + chrome + line_h * visible as f32 + pad + margin).max(160.0);
     Layout { width, height }
 }
 
@@ -81,12 +82,15 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     let fs = theme.font_size as f32 * scale as f32;
     let line_h = fs * LINE_HEIGHT;
     let pad = theme.padding as f32 * scale as f32;
+    let margin = theme.outer_margin as f32 * scale as f32;
     let chrome = if theme.show_traffic_lights {
         44.0 * scale as f32
     } else {
         16.0 * scale as f32
     };
     let radius = theme.corner_radius as f32 * scale as f32;
+    // Origen de la ventana: margen exterior + hueco de sombra.
+    let win_inset = margin + if theme.show_shadow { 8.0 * scale as f32 } else { 0.0 };
 
     let mut svg = String::with_capacity(64 * 1024);
     svg.push_str(&format!(
@@ -94,7 +98,11 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     ));
     svg.push_str(&font_defs(scale));
     svg.push_str(&format!(
-        r#"<defs><clipPath id="win"><rect width="{w}" height="{h}" rx="{radius}"/></clipPath></defs>"#,
+        r#"<defs><clipPath id="win"><rect x="{xi}" y="{yi}" width="{ww}" height="{wh}" rx="{radius}"/></clipPath></defs>"#,
+        xi = win_inset,
+        yi = win_inset,
+        ww = w - win_inset * 2.0,
+        wh = h - win_inset * 2.0,
     ));
 
     // Fondo exterior (backdrop).
@@ -107,28 +115,24 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         r#"<rect width="{w}" height="{h}" fill="{backdrop}"/>"#
     ));
 
-    // Sombra.
+    // Sombra: crece 8px alrededor de la ventana, dentro del margen.
     if theme.show_shadow {
         svg.push_str(&format!(
-            r#"<rect x="8" y="8" width="{bw}" height="{bh}" rx="{radius}" fill="black" opacity="0.35" filter="url(#blur)"/>"#,
-            bw = w - 16.0,
-            bh = h - 16.0,
+            r#"<rect x="{sx}" y="{sy}" width="{sw}" height="{sh}" rx="{radius}" fill="black" opacity="0.35" filter="url(#blur)"/>"#,
+            sx = win_inset - 4.0 * scale as f32,
+            sy = win_inset + 4.0 * scale as f32,
+            sw = w - win_inset * 2.0 + 8.0 * scale as f32,
+            sh = h - win_inset * 2.0 + 8.0 * scale as f32,
         ));
         svg.push_str(r#"<defs><filter id="blur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="6"/></filter></defs>"#);
     }
 
-    // Ventana del terminal.
-    let win_inset = if theme.show_shadow {
-        8.0 * scale as f32
-    } else {
-        0.0
-    };
-    let ww = w - win_inset * 2.0;
-    let wh = h - win_inset * 2.0;
     svg.push_str(&format!(
         r#"<g clip-path="url(#win)"><rect x="{xi}" y="{yi}" width="{ww}" height="{wh}" rx="{radius}" fill="{bg}"/>"#,
         xi = win_inset,
         yi = win_inset,
+        ww = w - win_inset * 2.0,
+        wh = h - win_inset * 2.0,
         bg = theme.background,
     ));
 
@@ -227,7 +231,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
 fn text(x: f32, y: f32, content: &str, fill: &str, scale: u32, style: &TextStyle) -> String {
     let family = font_family();
     format!(
-        r#"<text x="{x}" y="{y}" font-family="{family}" font-weight="{weight}" font-style="{style}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}">{content}</text>"#,
+        r#"<text xml:space="preserve" x="{x}" y="{y}" font-family="{family}" font-weight="{weight}" font-style="{style}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}">{content}</text>"#,
         fs = 14.0 * scale as f32,
         weight = if style.bold { "bold" } else { "normal" },
         style = if style.italic { "italic" } else { "normal" },

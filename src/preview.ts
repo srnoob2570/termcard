@@ -89,6 +89,7 @@ export function defaultTheme(): Theme {
     showTrafficLights: true,
     showShadow: true,
     cornerRadius: 12,
+    outerMargin: 16,
     padding: 24,
     fontSize: 14,
     promptSymbol: "❯",

@@ -18,7 +18,10 @@ pub struct Theme {
     pub show_traffic_lights: bool,
     pub show_shadow: bool,
     pub corner_radius: u32,
+    /// Padding interior de la ventana (alrededor del texto).
     pub padding: u32,
+    /// Margen exterior transparente alrededor de la tarjeta.
+    pub outer_margin: u32,
     /// Tamaño de fuente en px (unidad base del render; el export multiplica).
     pub font_size: u32,
     pub prompt_symbol: String,
@@ -36,6 +39,7 @@ impl Default for Theme {
             show_traffic_lights: true,
             show_shadow: true,
             corner_radius: 12,
+            outer_margin: 16,
             padding: 24,
             font_size: 14,
             prompt_symbol: "❯".into(),

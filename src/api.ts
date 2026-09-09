@@ -43,6 +43,7 @@ export interface Theme {
   showTrafficLights: boolean;
   showShadow: boolean;
   cornerRadius: number;
+  outerMargin: number;
   padding: number;
   fontSize: number;
   promptSymbol: string;
@@ -71,6 +72,7 @@ export const DEFAULT_PREFS: Prefs = {
     showTrafficLights: true,
     showShadow: true,
     cornerRadius: 12,
+    outerMargin: 16,
     padding: 24,
     fontSize: 14,
     promptSymbol: "❯",
