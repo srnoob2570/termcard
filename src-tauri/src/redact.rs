@@ -23,7 +23,12 @@ pub struct Redaction {
 
 /// Generates the default rules from the user's real environment.
 pub fn default_rules() -> Vec<RedactRule> {
-    let user = std::env::var("USER").unwrap_or_default();
+    // USER (Unix) → USERNAME (Windows).
+    let user = std::env::var("USER")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("USERNAME").ok())
+        .unwrap_or_default();
     let home = std::env::var("HOME").unwrap_or_else(|_| format!("/home/{user}"));
     let hostname = hostname();
     vec![
@@ -48,8 +53,18 @@ pub fn default_rules() -> Vec<RedactRule> {
     ]
 }
 
+/// Hostname for default rules: /etc/hostname (Unix) → COMPUTERNAME
+/// (Windows) → HOSTNAME → empty.
 fn hostname() -> String {
-    std::fs::read_to_string("/etc/hostname")
+    let from_file = std::fs::read_to_string("/etc/hostname")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    if !from_file.is_empty() {
+        return from_file;
+    }
+    ["COMPUTERNAME", "HOSTNAME"]
+        .iter()
+        .find_map(|name| std::env::var(name).ok().filter(|s| !s.trim().is_empty()))
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
 }
@@ -66,7 +81,12 @@ impl Redaction {
             // Per-pattern cached compilation to avoid recompiling per run.
             if let Ok(re) = compile(&rule.pattern) {
                 if re.is_match(&out) {
-                    out = re.replace_all(&out, rule.replacement.as_str()).into_owned();
+                    // Rule replacements are literal text, never expansion
+                    // templates: `$1` / `${name}` must not act as capture
+                    // references (predictable for a redaction tool). Doubling
+                    // `$` makes the regex crate emit a literal `$`.
+                    let literal = rule.replacement.replace('$', "$$");
+                    out = re.replace_all(&out, literal.as_str()).into_owned();
                 }
             }
         }
@@ -88,6 +108,10 @@ impl Redaction {
 static RE_CACHE: LazyLock<Mutex<std::collections::HashMap<String, std::sync::Arc<Regex>>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
+/// Upper bound on cached patterns; the cache is cleared (never a correctness
+/// issue) instead of growing unbounded with every variant the user types.
+const RE_CACHE_CAP: usize = 512;
+
 /// Compiles the pattern (cached). Returns Err if it doesn't compile.
 fn compile(pattern: &str) -> Result<std::sync::Arc<Regex>, regex::Error> {
     let mut map = RE_CACHE.lock();
@@ -95,6 +119,10 @@ fn compile(pattern: &str) -> Result<std::sync::Arc<Regex>, regex::Error> {
         return Ok(re.clone());
     }
     let re = std::sync::Arc::new(Regex::new(pattern)?);
+    if map.len() > RE_CACHE_CAP {
+        // Cache, not correctness: clearing is always safe.
+        map.clear();
+    }
     map.insert(pattern.to_string(), re.clone());
     Ok(re)
 }
@@ -155,6 +183,35 @@ mod tests {
     fn command_line_is_just_text() {
         let r = rules(&[("/home/maria", "~", true)]);
         assert_eq!(r.apply("cat /home/maria/.zshrc"), "cat ~/.zshrc");
+    }
+
+    #[test]
+    fn dollar_in_replacement_is_literal() {
+        // With capture expansion this would yield "secret"; the literal rule
+        // must output "$1" verbatim.
+        let r = rules(&[("(secret)", "$1", true)]);
+        assert_eq!(r.apply("secret here"), "$1 here");
+    }
+
+    #[test]
+    fn cache_cap_clears_on_overflow() {
+        // Fixed-width suffixes so no pattern is a substring of another token.
+        let r = Redaction {
+            rules: (0..600)
+                .map(|i| RedactRule {
+                    pattern: format!("zzp{i:04}"),
+                    replacement: "X".into(),
+                    enabled: true,
+                    is_default: false,
+                })
+                .collect(),
+        };
+        let text: String = (0..600).map(|i| format!("zzp{i:04} ")).collect();
+        assert_eq!(r.apply(&text), "X ".repeat(600));
+        // The map must have been cleared at the cap, not grown to 600.
+        assert!(RE_CACHE.lock().len() <= RE_CACHE_CAP + 1);
+        // Fresh patterns still compile and apply after the clear.
+        assert_eq!(r.apply("zzp0000"), "X");
     }
 
     #[test]
