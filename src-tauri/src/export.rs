@@ -1,4 +1,4 @@
-use crate::ir::{Capture, Color, Line};
+use crate::ir::{self, Capture, Color};
 use crate::theme::{Palette, Theme};
 use base64::Engine as _;
 use std::sync::LazyLock;
@@ -40,8 +40,9 @@ pub struct Layout {
 
 pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     let line_h = theme.font_size as f32 * LINE_HEIGHT;
-    // Visible lines: prompt + output (trailing empty rows get trimmed).
-    let visible = capture.visible_lines().count() + 1; // + prompt line
+    // Visible lines: prompt + output. Captures arrive already trimmed
+    // (`Capture::trimmed` at capture time), so `lines` has no trailing empties.
+    let visible = capture.lines.len() + 1; // + prompt line
     let chrome = if theme.show_traffic_lights {
         44.0
     } else {
@@ -52,10 +53,11 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     let shadow_gap = if theme.show_shadow { 8.0 } else { 0.0 };
     let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // per side
                                                                     // Automatic width: longest line (prompt included) + padding.
-    let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
+    let prompt_len = ir::str_width(&theme.prompt_symbol) + 1 + ir::str_width(&capture.command_line);
     let longest = capture
-        .visible_lines()
-        .map(|l| l.runs.iter().map(|r| r.text.chars().count()).sum::<usize>())
+        .lines
+        .iter()
+        .map(|l| l.runs.iter().map(|r| ir::str_width(&r.text)).sum::<usize>())
         .chain(std::iter::once(prompt_len))
         .max()
         .unwrap_or(20) as f32;
@@ -64,20 +66,21 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     Layout { width, height }
 }
 
-impl Capture {
-    /// Rows minus the trailing empty ones (the terminal always reports all 30).
-    pub fn visible_lines(&self) -> impl Iterator<Item = &Line> {
-        let last_content = self
-            .lines
-            .iter()
-            .rposition(|l| !l.runs.is_empty())
-            .map_or(0, |i| i + 1);
-        self.lines[..last_content].iter()
-    }
-}
-
 /// Renders the full SVG of the card. `scale` multiplies dimensions.
 pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u32) -> String {
+    render_svg_inner(capture, theme, palette, scale, true)
+}
+
+/// `embed_fonts` toggles the `@font-face` CSS: it is only needed by browsers
+/// (the preview). resvg resolves fonts through `fontdb` (see `render_png`),
+/// so the PNG path skips ~1.5 MB of dead base64 CSS.
+fn render_svg_inner(
+    capture: &Capture,
+    theme: &Theme,
+    palette: &Palette,
+    scale: u32,
+    embed_fonts: bool,
+) -> String {
     let layout = layout(capture, theme);
     let w = layout.width * scale as f32;
     let h = layout.height * scale as f32;
@@ -103,7 +106,9 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     svg.push_str(&format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">"#
     ));
-    svg.push_str(&font_defs(scale));
+    if embed_fonts {
+        svg.push_str(&font_defs());
+    }
     svg.push_str(&format!(
         r#"<defs><clipPath id="win"><rect x="{xi}" y="{yi}" width="{ww}" height="{wh}" rx="{radius}"/></clipPath></defs>"#,
         xi = win_inset,
@@ -130,7 +135,10 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
             sw = w - win_inset * 2.0 + 8.0 * scale as f32,
             sh = h - win_inset * 2.0 + 8.0 * scale as f32,
         ));
-        svg.push_str(r#"<defs><filter id="blur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="6"/></filter></defs>"#);
+        svg.push_str(&format!(
+            r#"<defs><filter id="blur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="{blur}"/></filter></defs>"#,
+            blur = 6.0 * f64::from(scale),
+        ));
     }
 
     svg.push_str(&format!(
@@ -139,7 +147,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         yi = win_inset,
         ww = w - win_inset * 2.0,
         wh = h - win_inset * 2.0,
-        bg = theme.background,
+        bg = escape_xml(&theme.background),
     ));
 
     // Title bar + traffic lights.
@@ -189,15 +197,16 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     y += line_h;
 
     // Body: runs of the capture.
-    for line in capture.visible_lines() {
+    for line in &capture.lines {
         let mut x = win_inset + pad;
         for run in &line.runs {
-            let w_run = run.text.chars().count() as f32 * fs * CH_WIDTH;
+            let w_run = ir::str_width(&run.text) as f32 * fs * CH_WIDTH;
             if let Some(bg) = run.bg.as_ref() {
                 let fill = resolve_color(bg, theme, palette, &theme.foreground);
                 svg.push_str(&format!(
                     r#"<rect x="{x}" y="{ybg}" width="{w_run}" height="{line_h}" fill="{fill}"/>"#,
                     ybg = y - fs * 0.8,
+                    fill = escape_xml(&fill),
                 ));
             }
             let fill = run
@@ -219,10 +228,11 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
             ));
             if run.underline {
                 svg.push_str(&format!(
-                    r#"<line x1="{x}" y1="{yu}" x2="{}" y2="{yu}" stroke="{fill}" stroke-width="{}"/>"#,
+                    r#"<line x1="{x}" y1="{yu}" x2="{}" y2="{yu}" stroke="{stroke}" stroke-width="{}"/>"#,
                     x + w_run,
                     fs * 0.06,
                     yu = y + fs * 0.15,
+                    stroke = escape_xml(&fill),
                 ));
             }
             x += w_run;
@@ -241,6 +251,7 @@ fn text(x: f32, y: f32, content: &str, fill: &str, font_px: f32, style: &TextSty
         weight = if style.bold { "bold" } else { "normal" },
         style = if style.italic { "italic" } else { "normal" },
         anchor = style.anchor,
+        fill = escape_xml(fill),
     )
 }
 
@@ -259,30 +270,43 @@ fn resolve_color(color: &Color, theme: &Theme, palette: &Palette, default_fg: &s
     }
 }
 
-fn font_defs(scale: u32) -> String {
+/// Base64 of the 4 embedded faces, encoded once (they are static includes).
+static FONT_B64: LazyLock<[String; 4]> = LazyLock::new(|| {
     let f = &*FONTS;
     let engine = base64::engine::general_purpose::STANDARD;
-    let face = |data: &[u8], weight: &str, style: &str| {
+    [
+        engine.encode(f.regular),
+        engine.encode(f.bold),
+        engine.encode(f.italic),
+        engine.encode(f.bold_italic),
+    ]
+});
+
+fn font_defs() -> String {
+    let face = |b64: &str, weight: &str, style: &str| {
         format!(
-            r#"@font-face {{ font-family: '{fam}'; font-weight: {weight}; font-style: {style}; src: url(data:font/ttf;base64,{b64}) format('truetype'); }}"#,
-            fam = font_family(),
-            b64 = engine.encode(data),
+            r#"@font-face {{ font-family: '{}'; font-weight: {weight}; font-style: {style}; src: url(data:font/ttf;base64,{b64}) format('truetype'); }}"#,
+            font_family(),
         )
     };
+    let [regular, bold, italic, bold_italic] = &*FONT_B64;
     format!(
         r#"<defs><style>{} {} {} {}</style></defs>"#,
-        face(f.regular, "normal", "normal"),
-        face(f.bold, "bold", "normal"),
-        face(f.italic, "normal", "italic"),
-        face(f.bold_italic, "bold", "italic"),
+        face(regular, "normal", "normal"),
+        face(bold, "bold", "normal"),
+        face(italic, "normal", "italic"),
+        face(bold_italic, "bold", "italic"),
     )
-    .replace("{fs}", &format!("{}", 14 * scale))
 }
 
+/// Escapes text and quoted-attribute values (`"`/`'` included, so a theme
+/// string can never break out of `fill="..."`).
 fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 /// Rasterizes the capture to PNG with resvg. `scale` is 2, 3 or 4.
@@ -292,7 +316,8 @@ pub fn render_png(
     palette: &Palette,
     scale: u32,
 ) -> Result<Vec<u8>, String> {
-    let svg = render_svg(capture, theme, palette, scale);
+    // Fonts come from `fontdb` below; the @font-face CSS is browser-only.
+    let svg = render_svg_inner(capture, theme, palette, scale, false);
 
     let mut fontdb = fontdb::Database::new();
     let f = &*FONTS;
@@ -358,11 +383,15 @@ mod tests {
 
     #[test]
     fn svg_escapes_xml() {
-        let (mut cap, theme, palette) = sample();
+        let (mut cap, mut theme, palette) = sample();
         cap.command_line = "echo \"<b>&\">".into();
+        // A hostile theme string must not break out of a quoted attribute.
+        theme.background = "#1e1e2e\" onload=\"pwn".into();
         let svg = render_svg(&cap, &theme, &palette, 1);
         assert!(svg.contains("&lt;b&gt;&amp;"));
         assert!(!svg.contains("<b>"));
+        assert!(svg.contains("&quot;"));
+        assert!(!svg.contains("fill=\"#1e1e2e\" onload"));
     }
 
     #[test]
