@@ -55,6 +55,9 @@ export interface Prefs {
     uncensored: boolean;
 }
 
+// Espejo TS de `Theme::default` + `Prefs` en src-tauri/src/theme.rs y lib.rs.
+// El preset "mac-dark" ES Theme::default(): una sola definición en Rust,
+// esta copia solo cubre el primer render antes del primer IPC.
 export const DEFAULT_PREFS: Prefs = {
     command: "",
     cwd: "",
@@ -81,13 +84,22 @@ export const DEFAULT_PREFS: Prefs = {
 export const api = {
     getPrefs: (): Promise<Prefs> => invoke("get_prefs"),
     savePrefs: (prefs: Prefs): Promise<void> => invoke("save_prefs", { prefs }),
-    runCapture: (command: string, cwd: string, rules: RedactRule[]): Promise<Capture> =>
-        invoke("run_capture", { command, cwd, rules }),
+    runCapture: (command: string, cwd: string): Promise<Capture> =>
+        invoke("run_capture", { command, cwd }),
     stopCapture: (): Promise<void> => invoke("stop_capture"),
-    exportPng: (capture: Capture, theme: Theme, scale: number): Promise<string> =>
-        invoke("export_png", { capture, theme, scale }),
-    exportSvg: (capture: Capture, theme: Theme): Promise<string> =>
-        invoke("export_svg", { capture, theme }),
+    exportPng: (
+        capture: Capture,
+        theme: Theme,
+        rules: RedactRule[],
+        scale: number
+    ): Promise<string> => invoke("export_png", { capture, theme, rules, scale }),
+    exportSvg: (
+        capture: Capture,
+        theme: Theme,
+        rules: RedactRule[],
+        showRaw: boolean
+    ): Promise<string> => invoke("export_svg", { capture, theme, rules, showRaw }),
+    presetTheme: (preset: string): Promise<Theme> => invoke("preset_theme", { preset }),
     defaultRules: (): Promise<RedactRule[]> => invoke("default_rules"),
     getHome: (): Promise<string> => invoke("get_home"),
     savePng: (base64Png: string, suggestedName: string): Promise<string> =>

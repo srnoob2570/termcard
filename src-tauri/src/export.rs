@@ -48,8 +48,10 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
         16.0
     };
     let pad = theme.padding as f32;
-    let margin = theme.outer_margin as f32 * 2.0; // a cada lado
-                                                  // Ancho automático: línea más larga (incluido el prompt) + padding.
+    // Hueco reservado alrededor de la ventana para que la sombra respire.
+    let shadow_gap = if theme.show_shadow { 8.0 } else { 0.0 };
+    let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // a cada lado
+                                                                    // Ancho automático: línea más larga (incluido el prompt) + padding.
     let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
     let longest = capture
         .visible_lines()
@@ -57,8 +59,8 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
         .chain(std::iter::once(prompt_len))
         .max()
         .unwrap_or(20) as f32;
-    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + margin).max(420.0);
-    let height = (pad + chrome + line_h * visible as f32 + pad + margin).max(160.0);
+    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + frame).max(420.0);
+    let height = (pad + chrome + line_h * visible as f32 + pad + frame).max(160.0);
     Layout { width, height }
 }
 
@@ -110,14 +112,13 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         wh = h - win_inset * 2.0,
     ));
 
-    // Fondo exterior (backdrop).
-    let backdrop = if theme.backdrop == "transparent" {
-        "none"
-    } else {
-        &theme.backdrop
-    };
+    // Fondo exterior (backdrop). El tema guarda el fill como string: "transparent",
+    // "#rrggbb" o "rgba(r,g,b,a)". resvg y Chromium resuelven los tres nativamente
+    // (verificado: transparent → alpha 0; rgba → alpha preservada), así que no hay
+    // que traducir nada: un rect sin pintar sería equivalente a alpha 0.
     svg.push_str(&format!(
-        r#"<rect width="{w}" height="{h}" fill="{backdrop}"/>"#
+        r#"<rect width="{w}" height="{h}" fill="{}"/>"#,
+        escape_xml(&theme.backdrop)
     ));
 
     // Sombra: crece 8px alrededor de la ventana, dentro del margen.
@@ -146,7 +147,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         let cy = win_inset + 20.0 * scale as f32;
         let lx = win_inset + pad;
         for (i, color) in ["#ff5f57", "#febc2e", "#28c840"].iter().enumerate() {
-            let cx = lx + (12.0 * scale as f32) * i as f32;
+            let cx = lx + (16.0 * scale as f32) * i as f32;
             svg.push_str(&format!(
                 r#"<circle cx="{cx}" cy="{cy}" r="{}" fill="{color}"/>"#,
                 6.0 * scale as f32

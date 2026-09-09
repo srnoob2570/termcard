@@ -4,6 +4,7 @@ import {
     Download,
     Eye,
     EyeOff,
+    Languages,
     OctagonX,
     Palette,
     Plus,
@@ -11,9 +12,23 @@ import {
     Terminal,
     Trash2,
 } from "lucide-react";
+import githubMark from "@/assets/github-mark.svg?raw";
 
-import { Badge } from "@/components/ui/badge";
+// Octicon `mark-github-16` oficial de Primer: lucide-react ya no trae iconos de
+// marca. Va inline (?raw) para que `fill="currentColor"` herede el color del
+// enlace; como <img> el SVG no ve el color del padre y se pinta negro.
+function GithubIcon() {
+    return (
+        <span
+            className="size-4 [&>svg]:size-full"
+            dangerouslySetInnerHTML={{ __html: githubMark }}
+            aria-hidden
+        />
+    );
+}
+
 import { Button } from "@/components/ui/button";
+import { ColorField } from "@/components/color-field";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,44 +52,23 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PREFS, api, type Capture, type Prefs, type RedactRule, type Theme } from "@/api";
-import { defaultPrefs } from "@/preview";
+
+/** Prefs iniciales para un primer arranque sin store previo. */
+function defaultPrefs(cwd: string, rules: Prefs["rules"]): Prefs {
+    return { ...DEFAULT_PREFS, cwd, rules };
+}
+
+/** Etiquetas de idioma para el selector WIP (solo UI, aún sin i18n real). */
+const LANGS = [
+    { id: "es", label: "Español" },
+    { id: "en", label: "English" },
+];
 
 const PRESET_LABELS: Record<string, string> = {
     "mac-dark": "Mac oscuro",
     "mac-light": "Mac claro",
     minimal: "Minimal",
     solarized: "Solarized",
-};
-
-const PRESET_OVERRIDES: Record<string, Partial<Theme>> = {
-    "mac-dark": {},
-    "mac-light": {
-        backdrop: "transparent",
-        background: "#f5f5f4",
-        foreground: "#3f3f46",
-        accent: "#d20f39",
-        showTrafficLights: true,
-        showShadow: true,
-        cornerRadius: 12,
-    },
-    minimal: {
-        backdrop: "transparent",
-        background: "#1e1e2e",
-        foreground: "#cdd6f4",
-        accent: "#89b4fa",
-        showTrafficLights: false,
-        showShadow: false,
-        cornerRadius: 6,
-    },
-    solarized: {
-        backdrop: "#002b36",
-        background: "#002b36",
-        foreground: "#93a1a1",
-        accent: "#b58900",
-        showTrafficLights: true,
-        showShadow: false,
-        cornerRadius: 8,
-    },
 };
 
 export default function App() {
@@ -89,6 +83,8 @@ export default function App() {
     });
     const setStatus = (msg: string, err = false) => setStatusState({ msg, err });
     const [ready, setReady] = useState(false);
+    // Idioma de la UI (WIP): de momento solo guarda el estado, sin i18n real.
+    const [lang, setLang] = useState("es");
 
     // ---- init ----
     useEffect(() => {
@@ -117,6 +113,8 @@ export default function App() {
     }, []);
 
     // El preview ES el SVG que se exporta: cero divergencia posible.
+    // Se regenera al cambiar la captura, el tema, las reglas de redacción o
+    // el toggle "mostrar sin censura" (solo preview; el export nunca).
     useEffect(() => {
         if (!capture) {
             setSvg(null);
@@ -124,13 +122,13 @@ export default function App() {
         }
         let alive = true;
         void api
-            .exportSvg(capture, prefs.theme)
+            .exportSvg(capture, prefs.theme, prefs.rules, prefs.uncensored)
             .then((s) => alive && setSvg(s))
             .catch(() => alive && setSvg(null));
         return () => {
             alive = false;
         };
-    }, [capture, prefs.theme]);
+    }, [capture, prefs.theme, prefs.rules, prefs.uncensored]);
 
     const patchPrefs = useCallback((patch: Partial<Prefs>) => {
         setPrefs((p) => {
@@ -158,7 +156,7 @@ export default function App() {
         setRunning(true);
         setStatus("Ejecutando…");
         try {
-            const cap = await api.runCapture(prefs.command, prefs.cwd, prefs.rules);
+            const cap = await api.runCapture(prefs.command, prefs.cwd);
             setCapture(cap);
             const n = cap.lines.filter((l) => l.runs.length > 0).length;
             setStatus(`Captura lista: ${n} líneas con contenido.`);
@@ -181,15 +179,17 @@ export default function App() {
     }, [run]);
 
     // ---- export ----
+    // El render corre en spawn_blocking en Rust: la UI sigue viva y este
+    // feedback sí llega a pintarse mientras se genera el PNG.
     const exportPng = useCallback(async () => {
         if (!capture) {
             setStatus("No hay captura para exportar.", true);
             return;
         }
         setExporting(true);
-        setStatus("Generando PNG…");
+        setStatus(`Generando PNG (${prefs.scale}×)…`);
         try {
-            const b64 = await api.exportPng(capture, prefs.theme, prefs.scale);
+            const b64 = await api.exportPng(capture, prefs.theme, prefs.rules, prefs.scale);
             const saved = await api.savePng(b64, `termcard-${Date.now()}.png`);
             setStatus(saved ? `Guardado en ${saved}` : "Exportación cancelada.");
         } catch (e) {
@@ -216,6 +216,7 @@ export default function App() {
             ],
         });
     };
+
     const restoreRules = async () => {
         patchPrefs({ rules: await api.defaultRules() });
     };
@@ -229,9 +230,23 @@ export default function App() {
                 <div className="mb-4 flex items-center gap-2">
                     <Terminal className="size-5 text-primary" />
                     <h1 className="text-base font-semibold tracking-tight">termcard</h1>
-                    <Badge variant="secondary" className="ml-auto font-mono text-[10px]">
-                        v0.1
-                    </Badge>
+                    {/* Selector de idiomas: WIP, de momento solo cambia el estado. */}
+                    <Select value={lang} onValueChange={(v) => v && setLang(v)}>
+                        <SelectTrigger
+                            size="sm"
+                            className="ml-auto gap-1 border-none bg-transparent shadow-none hover:bg-muted"
+                        >
+                            <Languages className="size-3.5 text-muted-foreground" />
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {LANGS.map((l) => (
+                                <SelectItem key={l.id} value={l.id}>
+                                    {l.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {/* Captura */}
@@ -264,7 +279,11 @@ export default function App() {
                         </Field>
                     </FieldGroup>
                     <div className="mt-3 flex gap-2">
-                        <Button onClick={() => void run()} disabled={running} className="flex-1">
+                        <Button
+                            onClick={() => void run()}
+                            disabled={running || exporting}
+                            className="flex-1"
+                        >
                             {running ? (
                                 <Spinner data-icon="inline-start" />
                             ) : (
@@ -376,7 +395,12 @@ export default function App() {
                             <Select
                                 value={t.preset}
                                 onValueChange={(v) => {
-                                    if (v) patchTheme({ preset: v, ...PRESET_OVERRIDES[v] });
+                                    if (!v) return;
+                                    // El preset trae el tema COMPLETO desde Rust:
+                                    // nunca quedan restos del preset anterior.
+                                    void api.presetTheme(v).then((full) => {
+                                        patchTheme(full);
+                                    });
                                 }}
                             >
                                 <SelectTrigger className="mt-1 h-8 w-full">
@@ -404,21 +428,29 @@ export default function App() {
                     <div className="mt-2 grid grid-cols-2 gap-2">
                         <div>
                             <Label className="text-xs">Acento</Label>
-                            <Input
-                                type="color"
-                                className="mt-1 h-8 p-1"
-                                value={t.accent}
-                                onChange={(e) => patchTheme({ accent: e.target.value })}
-                            />
+                            <div className="mt-1 flex h-8 items-center">
+                                <ColorField
+                                    value={t.accent}
+                                    onChange={(v) => patchTheme({ accent: v })}
+                                    ariaLabel="Color de acento"
+                                />
+                                <span className="ml-2 font-mono text-xs text-muted-foreground">
+                                    {t.accent}
+                                </span>
+                            </div>
                         </div>
                         <div>
                             <Label className="text-xs">Fondo ext.</Label>
-                            <Input
-                                type="color"
-                                className="mt-1 h-8 p-1"
-                                value={t.backdrop === "transparent" ? "#000000" : t.backdrop}
-                                onChange={(e) => patchTheme({ backdrop: e.target.value })}
-                            />
+                            <div className="mt-1 flex h-8 items-center">
+                                <ColorField
+                                    value={t.backdrop}
+                                    onChange={(v) => patchTheme({ backdrop: v })}
+                                    ariaLabel="Fondo exterior de la tarjeta"
+                                />
+                                <span className="ml-2 font-mono text-xs text-muted-foreground">
+                                    {t.backdrop === "transparent" ? "transparente" : t.backdrop}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className="mt-2">
@@ -500,9 +532,20 @@ export default function App() {
                         </label>
                     </div>
                 </section>
+                <div className="mt-auto flex items-center pt-3">
+                    <a
+                        href="https://github.com/srnoob2570/termcard"
+                        target="_blank"
+                        rel="noreferrer"
+                        title="termcard v0.1 — Repositorio en GitHub"
+                        className="inline-flex h-6 items-center gap-1.5 rounded-4xl border border-border bg-secondary px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
+                    >
+                        <GithubIcon />
+                        <span className="font-mono">v0.1</span>
+                    </a>
+                </div>
             </aside>
 
-            {/* Stage */}
             <main className="flex min-w-0 flex-1 flex-col">
                 <div className="flex items-center gap-2 border-b px-4 py-2.5">
                     <Label className="text-xs">Escala</Label>

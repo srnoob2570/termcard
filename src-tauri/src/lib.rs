@@ -65,14 +65,14 @@ fn save_prefs(prefs: serde_json::Value) -> Result<(), String> {
     Store::save_json(&prefs)
 }
 
-/// Ejecuta el comando en una PTY y devuelve la captura como JSON.
-/// `stop` de capturas previas se resetea al iniciar.
+/// Ejecuta el comando en una PTY y devuelve la captura como JSON SIN
+/// redactar: la redacción se aplica al renderizar (preview/export) para que
+/// editar reglas actualice el preview sin re-capturar.
 #[tauri::command]
 async fn run_capture(
     state: State<'_, AppState>,
     command: String,
     cwd: Option<String>,
-    rules: Vec<redact::RedactRule>,
 ) -> Result<serde_json::Value, String> {
     {
         let mut running = state.running.lock().await;
@@ -97,18 +97,8 @@ async fn run_capture(
     })
     .await
     .map_err(|e| e.to_string())?;
-
-    // Redacción se aplica sobre el IR completo antes de devolver.
-    let redaction = Redaction { rules };
-    let redacted = result
-        .map(|mut v| {
-            apply_redaction_to_json(&mut v, &redaction);
-            v
-        })
-        .map_err(|e: capture::CaptureError| e.0);
-
     *state.running.lock().await = false;
-    redacted
+    result.map_err(|e: capture::CaptureError| e.0)
 }
 
 #[tauri::command]
@@ -117,7 +107,7 @@ fn stop_capture(state: State<'_, AppState>) {
 }
 
 /// Aplica las reglas de redacción sobre commandLine y el texto de cada run.
-fn apply_redaction_to_json(v: &mut serde_json::Value, r: &Redaction) {
+fn redact_capture_value(v: &mut serde_json::Value, r: &Redaction) {
     if let Some(cl) = v.get_mut("commandLine").and_then(|c| c.as_str()) {
         let redacted = r.apply(cl);
         v["commandLine"] = serde_json::Value::String(redacted);
@@ -137,23 +127,65 @@ fn apply_redaction_to_json(v: &mut serde_json::Value, r: &Redaction) {
 }
 
 /// Genera el PNG de la captura a la escala pedida y lo devuelve en base64.
+/// Siempre aplica las reglas guardadas: el export nunca muestra sin censura.
+///
+/// El render (fontdb + resvg + encode) es CPU-intensivo y bloqueante; corre en
+/// `spawn_blocking` para no congelar el hilo principal (la UI dejaría de
+/// responder y el spinner de exportación no llegaría a pintarse).
 #[tauri::command]
-fn export_png(capture: serde_json::Value, theme: Theme, scale: u32) -> Result<String, String> {
+async fn export_png(
+    capture: serde_json::Value,
+    theme: Theme,
+    rules: Vec<redact::RedactRule>,
+    scale: u32,
+) -> Result<String, String> {
     if !matches!(scale, 2..=4) {
         return Err(format!("escala inválida: {scale}"));
     }
-    let cap: ir::Capture = serde_json::from_value(capture).map_err(|e| e.to_string())?;
-    let png = export::render_png(&cap, &theme, &Palette::default(), scale)?;
-    use base64::Engine as _;
-    Ok(base64::engine::general_purpose::STANDARD.encode(png))
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut cap = capture;
+        redact_capture_value(&mut cap, &Redaction { rules });
+        let cap: ir::Capture = serde_json::from_value(cap).map_err(|e| e.to_string())?;
+        let png = export::render_png(&cap, &theme, &Palette::default(), scale)?;
+        use base64::Engine as _;
+        Ok(base64::engine::general_purpose::STANDARD.encode(png))
+    })
+    .await
+    .map_err(|e| format!("export cancelado: {e}"))?
 }
 
 /// SVG exacto que el exportador rasteriza; el preview lo muestra tal cual,
-/// así preview y PNG no pueden divergir.
+/// así preview y PNG no pueden divergir. `showRaw` solo lo pide el preview
+/// para el toggle temporal "mostrar sin censura".
+///
+/// Igual que `export_png`: el render va a `spawn_blocking` para no bloquear el
+/// hilo principal mientras se escribe en el panel de tema/reglas.
 #[tauri::command]
-fn export_svg(capture: serde_json::Value, theme: Theme) -> Result<String, String> {
-    let cap: ir::Capture = serde_json::from_value(capture).map_err(|e| e.to_string())?;
-    Ok(export::render_svg(&cap, &theme, &Palette::default(), 1))
+async fn export_svg(
+    capture: serde_json::Value,
+    theme: Theme,
+    rules: Vec<redact::RedactRule>,
+    show_raw: Option<bool>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut cap = capture;
+        if !show_raw.unwrap_or(false) {
+            redact_capture_value(&mut cap, &Redaction { rules });
+        }
+        let cap: ir::Capture = serde_json::from_value(cap).map_err(|e| e.to_string())?;
+        Ok(export::render_svg(&cap, &theme, &Palette::default(), 1))
+    })
+    .await
+    .map_err(|e| format!("export cancelado: {e}"))?
+}
+
+/// Tema completo de un preset. El frontend reemplaza su tema entero al
+/// cambiar de preset: los overrides parciales dejaban restos del anterior.
+#[tauri::command]
+fn preset_theme(preset: &str) -> Result<Theme, String> {
+    theme::Preset::from_id(preset)
+        .map(|p| p.theme())
+        .ok_or_else(|| format!("preset desconocido: {preset}"))
 }
 
 /// Reglas por defecto generadas del entorno real del usuario.
@@ -188,7 +220,14 @@ async fn save_png(
 }
 
 async fn rfd_dialog(app: &AppHandle, name: &str) -> Result<String, String> {
-    let dialog = app.dialog().file().set_file_name(name);
+    // Arranca en ~/Imágenes (o $HOME si XDG no la define) en vez del directorio
+    // desde el que se lanzó el proceso.
+    let inicio = app.path().picture_dir().map_err(|e| e.to_string())?;
+    let dialog = app
+        .dialog()
+        .file()
+        .set_directory(inicio)
+        .set_file_name(name);
     match dialog.blocking_save_file() {
         Some(p) => Ok(p.to_string()),
         None => Ok(String::new()),
@@ -216,6 +255,7 @@ pub fn run() {
             stop_capture,
             export_png,
             export_svg,
+            preset_theme,
             default_rules,
             get_home,
             save_png

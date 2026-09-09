@@ -57,6 +57,31 @@ pub enum Preset {
 }
 
 impl Preset {
+    /// Todos los presets, en orden de la UI.
+    pub const ALL: [Preset; 4] = [
+        Preset::MacDark,
+        Preset::MacLight,
+        Preset::Minimal,
+        Preset::Solarized,
+    ];
+
+    /// Preset a partir de su identificador de tema (`preset` en el JSON).
+    pub fn from_id(id: &str) -> Option<Preset> {
+        Preset::ALL.iter().copied().find(|p| p.id() == id)
+    }
+
+    /// Identificador estable del preset (coincide con `theme.preset`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Preset::MacDark => "mac-dark",
+            Preset::MacLight => "mac-light",
+            Preset::Minimal => "minimal",
+            Preset::Solarized => "solarized",
+        }
+    }
+
+    /// Tema completo de cada preset. ÚNICA fuente de verdad: la UI lo pide
+    /// por IPC (`preset_theme`) y reemplaza su tema entero con la respuesta.
     pub fn theme(self) -> Theme {
         let base = Theme::default();
         match self {
@@ -78,10 +103,12 @@ impl Preset {
             },
             Preset::Solarized => Theme {
                 preset: "solarized".into(),
-                backdrop: "#002b36".into(),
+                backdrop: "transparent".into(),
                 background: "#002b36".into(),
                 foreground: "#93a1a1".into(),
                 accent: "#b58900".into(),
+                show_shadow: false,
+                corner_radius: 8,
                 ..base
             },
         }
@@ -161,6 +188,16 @@ mod tests {
         assert!(!t.show_traffic_lights);
         assert!(!t.show_shadow);
         assert!(t.title.is_empty());
+    }
+
+    #[test]
+    fn preset_solarized_disables_shadow() {
+        let t = Preset::Solarized.theme();
+        assert!(!t.show_shadow);
+        assert_eq!(t.corner_radius, 8);
+        assert_eq!(t.outer_margin, 16);
+        assert!(t.show_traffic_lights);
+        assert_eq!(t.backdrop, "transparent");
     }
 
     #[test]

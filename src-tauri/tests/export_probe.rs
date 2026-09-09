@@ -65,6 +65,63 @@ fn fixture() -> (Capture, Theme, Palette) {
 }
 
 #[test]
+fn probe_no_shadow_case() {
+    // Solarized/Minimal: show_shadow=false. El texto debe quedar dentro del
+    // padding derecho (sin overflow) y el margen sigue presente.
+    let (cap, mut theme, palette) = fixture();
+    theme.show_shadow = false;
+    let lay = layout(&cap, &theme);
+    let svg = render_svg(&cap, &theme, &palette, 2);
+    std::fs::create_dir_all("/tmp/termcard-debug").unwrap();
+    std::fs::write("/tmp/termcard-debug/noshadow.svg", &svg).unwrap();
+    println!("no-shadow layout: {}x{}", lay.width, lay.height);
+    let win_inset = theme.outer_margin as f32; // sin hueco de sombra
+    println!(
+        "win_inset={} → área de texto: {}..{} (px@2x: {}..{})",
+        win_inset,
+        win_inset + theme.padding as f32,
+        lay.width - win_inset - theme.padding as f32,
+        (win_inset + theme.padding as f32) * 2.0,
+        (lay.width - win_inset - theme.padding as f32) * 2.0
+    );
+    let png = render_png(&cap, &theme, &palette, 2).expect("png");
+    std::fs::write("/tmp/termcard-debug/noshadow.png", &png).unwrap();
+    let img = image::load_from_memory(&png).unwrap().to_rgba8();
+    let (w, h) = img.dimensions();
+    let bg = {
+        let s = theme.background.trim_start_matches('#');
+        (
+            u8::from_str_radix(&s[0..2], 16).unwrap(),
+            u8::from_str_radix(&s[2..4], 16).unwrap(),
+            u8::from_str_radix(&s[4..6], 16).unwrap(),
+        )
+    };
+    let px = |x: u32, y: u32| img.get_pixel(x, y).0;
+    let is_text = |p: [u8; 4]| {
+        p[3] > 200
+            && (p[0].abs_diff(bg.0) as u32
+                + p[1].abs_diff(bg.1) as u32
+                + p[2].abs_diff(bg.2) as u32)
+                > 30
+    };
+    let mut mx = 0u32;
+    for y in 32..h - 32 {
+        for x in (32..w - 32).rev() {
+            if is_text(px(x, y)) {
+                mx = mx.max(x);
+                break;
+            }
+        }
+    }
+    let pad_right_px = (lay.width - win_inset - theme.padding as f32) * 2.0;
+    println!("max text x = {mx}, right pad edge px = {pad_right_px}");
+    assert!(
+        (mx as f32) <= pad_right_px + 1.0,
+        "texto desborda el padding derecho: {mx} > {pad_right_px}"
+    );
+}
+
+#[test]
 fn probe_dumps_artifacts() {
     let (cap, theme, palette) = fixture();
     let lay = layout(&cap, &theme);
