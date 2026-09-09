@@ -52,16 +52,25 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     // Gap reserved around the window so the shadow can breathe.
     let shadow_gap = if theme.show_shadow { 8.0 } else { 0.0 };
     let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // per side
-                                                                    // Automatic width: longest line (prompt included) + padding.
-    let prompt_len = ir::str_width(&theme.prompt_symbol) + 1 + ir::str_width(&capture.command_line);
-    let longest = capture
-        .lines
-        .iter()
-        .map(|l| l.runs.iter().map(|r| ir::str_width(&r.text)).sum::<usize>())
-        .chain(std::iter::once(prompt_len))
-        .max()
-        .unwrap_or(20) as f32;
-    let width = (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + frame).max(420.0);
+    let width = match theme.card_width {
+        // Manual: the card (terminal window) is exactly this many px wide.
+        // A too-narrow value lets text overflow the window; the card never
+        // grows beyond the request (re-capture to flow the text again).
+        Some(w) => (pad * 2.0 + w as f32 + frame).max(420.0),
+        // Automatic: longest line (prompt included) + padding.
+        None => {
+            let prompt_len =
+                ir::str_width(&theme.prompt_symbol) + 1 + ir::str_width(&capture.command_line);
+            let longest = capture
+                .lines
+                .iter()
+                .map(|l| l.runs.iter().map(|r| ir::str_width(&r.text)).sum::<usize>())
+                .chain(std::iter::once(prompt_len))
+                .max()
+                .unwrap_or(20) as f32;
+            (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + frame).max(420.0)
+        }
+    };
     let height = (pad + chrome + line_h * visible as f32 + pad + frame).max(160.0);
     Layout { width, height }
 }
@@ -370,6 +379,33 @@ mod tests {
             ],
         };
         (cap, Theme::default(), Palette::default())
+    }
+
+    #[test]
+    fn manual_card_width_is_exact() {
+        let (mut cap, mut theme, palette) = sample();
+        theme.card_width = Some(160);
+        // 420 floor wins: 160 + 24*2 padding + (16*2+8*2) frame = 256 < 420.
+        let l = layout(&cap, &theme);
+        assert_eq!(l.width, 420.0);
+        assert!(l.width > 160.0);
+        // Manual beats content: a longer line does not grow the card.
+        cap.lines[0].runs[0].text = "x".repeat(400);
+        assert_eq!(layout(&cap, &theme).width, 420.0);
+    }
+
+    #[test]
+    fn manual_card_width_above_floor() {
+        let (cap, mut theme, _palette) = sample();
+        theme.card_width = Some(600);
+        // 600 + 24*2 + (16*2 + 8*2) = 696: exact window + frame, no content influence.
+        assert_eq!(layout(&cap, &theme).width, 696.0);
+    }
+
+    #[test]
+    fn automatic_width_ignores_manual_setting() {
+        let (cap, mut theme, _palette) = sample();
+        assert_eq!(layout(&cap, &theme).width, 420.0);
     }
 
     #[test]

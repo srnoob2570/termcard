@@ -24,6 +24,9 @@ pub struct Theme {
     pub outer_margin: u32,
     /// Font size in px (base render unit; the export multiplies it).
     pub font_size: u32,
+    /// Fixed card (terminal window) width in px; `None` fits the width to the
+    /// longest line (automatic).
+    pub card_width: Option<u32>,
     pub prompt_symbol: String,
 }
 
@@ -42,6 +45,7 @@ impl Default for Theme {
             outer_margin: 16,
             padding: 24,
             font_size: 14,
+            card_width: None,
             prompt_symbol: "❯".into(),
         }
     }

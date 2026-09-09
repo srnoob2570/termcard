@@ -53,6 +53,8 @@ export interface Theme {
     padding: number;
     fontSize: number;
     promptSymbol: string;
+    /** Fixed card width in px; null fits the width to the content (auto). */
+    cardWidth: number | null;
 }
 
 export interface Prefs {
@@ -86,6 +88,7 @@ export const DEFAULT_PREFS: Prefs = {
         padding: 24,
         fontSize: 14,
         promptSymbol: "❯",
+        cardWidth: null,
     },
     scale: 2,
     uncensored: false,
