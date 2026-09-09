@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { detectLang, type Lang } from "@/i18n";
 
 export interface Run {
     text: string;
@@ -53,6 +54,7 @@ export interface Prefs {
     theme: Theme;
     scale: number;
     uncensored: boolean;
+    lang: Lang;
 }
 
 // Espejo TS de `Theme::default` + `Prefs` en src-tauri/src/theme.rs y lib.rs.
@@ -79,6 +81,7 @@ export const DEFAULT_PREFS: Prefs = {
     },
     scale: 2,
     uncensored: false,
+    lang: detectLang(),
 };
 
 export const api = {

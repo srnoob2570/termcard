@@ -18,11 +18,15 @@ export function ColorField({
     onChange,
     className,
     ariaLabel,
+    hexAriaLabel,
+    transparentLabel,
 }: {
     value: string;
     onChange: (v: string) => void;
     className?: string;
     ariaLabel: string;
+    hexAriaLabel: string;
+    transparentLabel: string;
 }) {
     // Estado del picker en hex8 (#rrggbbaa), el formato de HexAlphaColorPicker.
     const [hex8, setHex8] = useState(() => toHex8(value));
@@ -77,7 +81,7 @@ export function ColorField({
                         }}
                         className="h-7 font-mono text-xs"
                         spellCheck={false}
-                        aria-label="Color en formato hexadecimal con alfa"
+                        aria-label={hexAriaLabel}
                     />
                     <Button
                         variant="outline"
@@ -85,7 +89,7 @@ export function ColorField({
                         className="h-7 shrink-0 text-xs"
                         onClick={() => commit("#00000000")}
                     >
-                        Transparente
+                        {transparentLabel}
                     </Button>
                 </div>
             </PopoverContent>

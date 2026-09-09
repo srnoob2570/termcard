@@ -52,23 +52,18 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PREFS, api, type Capture, type Prefs, type RedactRule, type Theme } from "@/api";
+import { LANGS, translate, type Lang, type MessageKey } from "@/i18n";
 
 /** Prefs iniciales para un primer arranque sin store previo. */
 function defaultPrefs(cwd: string, rules: Prefs["rules"]): Prefs {
     return { ...DEFAULT_PREFS, cwd, rules };
 }
 
-/** Etiquetas de idioma para el selector WIP (solo UI, aún sin i18n real). */
-const LANGS = [
-    { id: "es", label: "Español" },
-    { id: "en", label: "English" },
-];
-
-const PRESET_LABELS: Record<string, string> = {
-    "mac-dark": "Mac oscuro",
-    "mac-light": "Mac claro",
-    minimal: "Minimal",
-    solarized: "Solarized",
+const PRESET_LABELS: Record<string, MessageKey> = {
+    "mac-dark": "presetMacDark",
+    "mac-light": "presetMacLight",
+    minimal: "presetMinimal",
+    solarized: "presetSolarized",
 };
 
 export default function App() {
@@ -78,13 +73,17 @@ export default function App() {
     const [svg, setSvg] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
     const [status, setStatusState] = useState<{ msg: string; err: boolean }>({
-        msg: "Cargando…",
+        msg: translate(DEFAULT_PREFS.lang, "statusLoading"),
         err: false,
     });
     const setStatus = (msg: string, err = false) => setStatusState({ msg, err });
     const [ready, setReady] = useState(false);
-    // Idioma de la UI (WIP): de momento solo guarda el estado, sin i18n real.
-    const [lang, setLang] = useState("es");
+    // Traductor de UI: el idioma vive en prefs.lang (única fuente, sin estado duplicado).
+    const msg = useCallback(
+        (key: MessageKey, params?: Record<string, string | number>) =>
+            translate(prefs.lang, key, params),
+        [prefs.lang]
+    );
 
     // ---- init ----
     useEffect(() => {
@@ -98,19 +97,29 @@ export default function App() {
                         ...saved,
                         theme: { ...DEFAULT_PREFS.theme, ...saved.theme },
                     };
+                    // El store no es de confianza: un lang corrupto rompería el Select.
+                    const storedLang = next.lang as string;
+                    if (storedLang !== "es" && storedLang !== "en") {
+                        next.lang = DEFAULT_PREFS.lang;
+                    }
                     if (!next.rules.length) next.rules = await api.defaultRules();
                 } else {
                     next = defaultPrefs(await api.getHome(), await api.defaultRules());
                 }
                 setPrefs(next);
             } catch {
-                setStatus("No se pudieron cargar preferencias.", true);
+                setStatus(msg("statusPrefsError"), true);
             } finally {
                 setReady(true);
-                setStatus("Listo.");
+                setStatus(msg("statusReady"));
             }
         })();
     }, []);
+
+    // index.html trae lang="es" fijo: se corrige al montar y al cambiar de idioma.
+    useEffect(() => {
+        document.documentElement.lang = prefs.lang;
+    }, [prefs.lang]);
 
     // El preview ES el SVG que se exporta: cero divergencia posible.
     // Se regenera al cambiar la captura, el tema, las reglas de redacción o
@@ -150,18 +159,18 @@ export default function App() {
     const run = useCallback(async () => {
         if (running) return;
         if (!prefs.command.trim()) {
-            setStatus("Escribe un comando primero.", true);
+            setStatus(msg("statusEmptyCommand"), true);
             return;
         }
         setRunning(true);
-        setStatus("Ejecutando…");
+        setStatus(msg("statusRunning"));
         try {
             const cap = await api.runCapture(prefs.command, prefs.cwd);
             setCapture(cap);
             const n = cap.lines.filter((l) => l.runs.length > 0).length;
-            setStatus(`Captura lista: ${n} líneas con contenido.`);
+            setStatus(msg("statusCaptureDone", { n }));
         } catch (e) {
-            setStatus(`Error: ${e}`, true);
+            setStatus(msg("statusError", { detail: String(e) }), true);
         } finally {
             setRunning(false);
         }
@@ -183,17 +192,17 @@ export default function App() {
     // feedback sí llega a pintarse mientras se genera el PNG.
     const exportPng = useCallback(async () => {
         if (!capture) {
-            setStatus("No hay captura para exportar.", true);
+            setStatus(msg("statusNoCapture"), true);
             return;
         }
         setExporting(true);
-        setStatus(`Generando PNG (${prefs.scale}×)…`);
+        setStatus(msg("statusGeneratingPng", { scale: prefs.scale }));
         try {
             const b64 = await api.exportPng(capture, prefs.theme, prefs.rules, prefs.scale);
             const saved = await api.savePng(b64, `termcard-${Date.now()}.png`);
-            setStatus(saved ? `Guardado en ${saved}` : "Exportación cancelada.");
+            setStatus(saved ? msg("statusSavedTo", { path: saved }) : msg("statusExportCancelled"));
         } catch (e) {
-            setStatus(`Error exportando: ${e}`, true);
+            setStatus(msg("statusExportError", { detail: String(e) }), true);
         } finally {
             setExporting(false);
         }
@@ -230,8 +239,11 @@ export default function App() {
                 <div className="mb-4 flex items-center gap-2">
                     <Terminal className="size-5 text-primary" />
                     <h1 className="text-base font-semibold tracking-tight">termcard</h1>
-                    {/* Selector de idiomas: WIP, de momento solo cambia el estado. */}
-                    <Select value={lang} onValueChange={(v) => v && setLang(v)}>
+                    {/* Selector de idiomas: persiste en prefs.lang. */}
+                    <Select
+                        value={prefs.lang}
+                        onValueChange={(v) => v && patchPrefs({ lang: v as Lang })}
+                    >
                         <SelectTrigger
                             size="sm"
                             className="ml-auto gap-1 border-none bg-transparent shadow-none hover:bg-muted"
@@ -254,7 +266,7 @@ export default function App() {
                     <FieldGroup>
                         <Field>
                             <FieldLabel className="text-xs uppercase text-muted-foreground tracking-wide">
-                                Captura
+                                {msg("sectionCapture")}
                             </FieldLabel>
                             <Textarea
                                 id="command"
@@ -267,7 +279,7 @@ export default function App() {
                         </Field>
                         <Field>
                             <FieldLabel htmlFor="cwd" className="text-xs">
-                                Directorio
+                                {msg("labelDirectory")}
                             </FieldLabel>
                             <Input
                                 id="cwd"
@@ -289,12 +301,12 @@ export default function App() {
                             ) : (
                                 <Camera data-icon="inline-start" />
                             )}
-                            {running ? "Ejecutando…" : "Ejecutar"}
+                            {running ? msg("statusRunning") : msg("actionRun")}
                         </Button>
                         {running && (
                             <Button variant="outline" onClick={() => void api.stopCapture()}>
                                 <OctagonX data-icon="inline-start" />
-                                Detener
+                                {msg("actionStop")}
                             </Button>
                         )}
                     </div>
@@ -306,14 +318,14 @@ export default function App() {
                 <section>
                     <div className="flex items-center justify-between">
                         <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-                            Redacción
+                            {msg("sectionRedaction")}
                         </Label>
                         <div className="flex gap-1">
                             <Button
                                 size="icon-xs"
                                 variant="ghost"
                                 onClick={addRule}
-                                title="Añadir regla"
+                                title={msg("titleAddRule")}
                             >
                                 <Plus />
                             </Button>
@@ -321,7 +333,7 @@ export default function App() {
                                 size="icon-xs"
                                 variant="ghost"
                                 onClick={() => void restoreRules()}
-                                title="Restaurar por defecto"
+                                title={msg("titleRestoreRules")}
                             >
                                 <RotateCcw />
                             </Button>
@@ -344,7 +356,7 @@ export default function App() {
                                 <span className="text-xs text-muted-foreground">→</span>
                                 <Input
                                     className="h-7 flex-1 px-2 text-[11px]"
-                                    placeholder="reemplazo"
+                                    placeholder={msg("placeholderReplacement")}
                                     value={rule.replacement}
                                     onChange={(e) => setRule(i, { replacement: e.target.value })}
                                 />
@@ -355,8 +367,8 @@ export default function App() {
                                     onClick={() => removeRule(i)}
                                     title={
                                         rule.isDefault
-                                            ? "Las reglas por defecto se desactivan, no borran"
-                                            : "Eliminar"
+                                            ? msg("titleDefaultRuleNoDelete")
+                                            : msg("titleDeleteRule")
                                     }
                                 >
                                     <Trash2 />
@@ -375,7 +387,9 @@ export default function App() {
                         ) : (
                             <Eye data-icon="inline-start" />
                         )}
-                        {prefs.uncensored ? "Ocultar datos" : "Mostrar sin censura"}
+                        {prefs.uncensored
+                            ? msg("actionUncensoredHide")
+                            : msg("actionUncensoredShow")}
                     </Button>
                 </section>
 
@@ -386,7 +400,7 @@ export default function App() {
                     <div className="flex items-center gap-1.5">
                         <Palette className="size-3.5 text-muted-foreground" />
                         <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-                            Tema
+                            {msg("sectionTheme")}
                         </Label>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
@@ -407,16 +421,16 @@ export default function App() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {Object.entries(PRESET_LABELS).map(([v, l]) => (
+                                    {Object.entries(PRESET_LABELS).map(([v, k]) => (
                                         <SelectItem key={v} value={v}>
-                                            {l}
+                                            {msg(k)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div>
-                            <Label className="text-xs">Símbolo prompt</Label>
+                            <Label className="text-xs">{msg("labelPromptSymbol")}</Label>
                             <Input
                                 className="mt-1 h-8 text-center font-mono"
                                 maxLength={3}
@@ -427,12 +441,14 @@ export default function App() {
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                         <div>
-                            <Label className="text-xs">Acento</Label>
+                            <Label className="text-xs">{msg("labelAccent")}</Label>
                             <div className="mt-1 flex h-8 items-center">
                                 <ColorField
                                     value={t.accent}
                                     onChange={(v) => patchTheme({ accent: v })}
-                                    ariaLabel="Color de acento"
+                                    ariaLabel={msg("ariaAccent")}
+                                    hexAriaLabel={msg("ariaColorHex")}
+                                    transparentLabel={msg("colorTransparent")}
                                 />
                                 <span className="ml-2 font-mono text-xs text-muted-foreground">
                                     {t.accent}
@@ -440,21 +456,25 @@ export default function App() {
                             </div>
                         </div>
                         <div>
-                            <Label className="text-xs">Fondo ext.</Label>
+                            <Label className="text-xs">{msg("labelBackdrop")}</Label>
                             <div className="mt-1 flex h-8 items-center">
                                 <ColorField
                                     value={t.backdrop}
                                     onChange={(v) => patchTheme({ backdrop: v })}
-                                    ariaLabel="Fondo exterior de la tarjeta"
+                                    ariaLabel={msg("ariaBackdrop")}
+                                    hexAriaLabel={msg("ariaColorHex")}
+                                    transparentLabel={msg("colorTransparent")}
                                 />
                                 <span className="ml-2 font-mono text-xs text-muted-foreground">
-                                    {t.backdrop === "transparent" ? "transparente" : t.backdrop}
+                                    {t.backdrop === "transparent"
+                                        ? msg("transparentText")
+                                        : t.backdrop}
                                 </span>
                             </div>
                         </div>
                     </div>
                     <div className="mt-2">
-                        <Label className="text-xs">Título</Label>
+                        <Label className="text-xs">{msg("labelTitle")}</Label>
                         <Input
                             className="mt-1 h-8"
                             value={t.title}
@@ -463,7 +483,7 @@ export default function App() {
                     </div>
                     <div className="mt-2 grid grid-cols-4 gap-2">
                         <div>
-                            <Label className="text-xs">Fuente</Label>
+                            <Label className="text-xs">{msg("labelFontSize")}</Label>
                             <Input
                                 type="number"
                                 className="mt-1 h-8"
@@ -476,7 +496,7 @@ export default function App() {
                             />
                         </div>
                         <div>
-                            <Label className="text-xs">Radio</Label>
+                            <Label className="text-xs">{msg("labelRadius")}</Label>
                             <Input
                                 type="number"
                                 className="mt-1 h-8"
@@ -502,7 +522,7 @@ export default function App() {
                             />
                         </div>
                         <div>
-                            <Label className="text-xs">Margen</Label>
+                            <Label className="text-xs">{msg("labelMargin")}</Label>
                             <Input
                                 type="number"
                                 className="mt-1 h-8"
@@ -528,7 +548,7 @@ export default function App() {
                                 checked={t.showShadow}
                                 onCheckedChange={(v) => patchTheme({ showShadow: v })}
                             />
-                            Sombra
+                            {msg("labelShadow")}
                         </label>
                     </div>
                 </section>
@@ -537,7 +557,7 @@ export default function App() {
                         href="https://github.com/srnoob2570/termcard"
                         target="_blank"
                         rel="noreferrer"
-                        title="termcard v0.1 — Repositorio en GitHub"
+                        title={msg("githubTitle")}
                         className="inline-flex h-6 items-center gap-1.5 rounded-4xl border border-border bg-secondary px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
                     >
                         <GithubIcon />
@@ -548,7 +568,7 @@ export default function App() {
 
             <main className="flex min-w-0 flex-1 flex-col">
                 <div className="flex items-center gap-2 border-b px-4 py-2.5">
-                    <Label className="text-xs">Escala</Label>
+                    <Label className="text-xs">{msg("labelScale")}</Label>
                     <Select
                         value={String(prefs.scale)}
                         onValueChange={(v) => patchPrefs({ scale: Number(v) })}
@@ -572,7 +592,7 @@ export default function App() {
                         ) : (
                             <Download data-icon="inline-start" />
                         )}
-                        {exporting ? "Generando…" : "Exportar PNG"}
+                        {exporting ? msg("statusGenerating") : msg("actionExportPng")}
                     </Button>
                 </div>
 
@@ -589,12 +609,10 @@ export default function App() {
                                     <Camera />
                                 </EmptyMedia>
                                 <EmptyTitle>
-                                    {ready ? "Sin captura todavía" : "Cargando…"}
+                                    {ready ? msg("emptyNoCapture") : msg("statusLoading")}
                                 </EmptyTitle>
                                 <EmptyDescription>
-                                    {ready
-                                        ? "Ejecuta un comando para generar la tarjeta."
-                                        : "Recuperando preferencias guardadas."}
+                                    {ready ? msg("emptyRunCommand") : msg("emptyLoadingPrefs")}
                                 </EmptyDescription>
                             </EmptyHeader>
                         </Empty>
