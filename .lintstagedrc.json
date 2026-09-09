@@ -1,0 +1,4 @@
+{
+    "*.{ts,tsx,js,jsx,css,json,md,html}": "prettier --write",
+    "src-tauri/**/*.rs": "rustfmt --edition 2021"
+}

@@ -49,7 +49,7 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     };
     let pad = theme.padding as f32;
     let margin = theme.outer_margin as f32 * 2.0; // a cada lado
-    // Ancho automático: línea más larga (incluido el prompt) + padding.
+                                                  // Ancho automático: línea más larga (incluido el prompt) + padding.
     let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
     let longest = capture
         .visible_lines()
@@ -90,7 +90,12 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     };
     let radius = theme.corner_radius as f32 * scale as f32;
     // Origen de la ventana: margen exterior + hueco de sombra.
-    let win_inset = margin + if theme.show_shadow { 8.0 * scale as f32 } else { 0.0 };
+    let win_inset = margin
+        + if theme.show_shadow {
+            8.0 * scale as f32
+        } else {
+            0.0
+        };
 
     let mut svg = String::with_capacity(64 * 1024);
     svg.push_str(&format!(
@@ -228,14 +233,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     svg
 }
 
-fn text(
-    x: f32,
-    y: f32,
-    content: &str,
-    fill: &str,
-    font_px: f32,
-    style: &TextStyle,
-) -> String {
+fn text(x: f32, y: f32, content: &str, fill: &str, font_px: f32, style: &TextStyle) -> String {
     let family = font_family();
     format!(
         r#"<text xml:space="preserve" x="{x}" y="{y}" font-family="{family}" font-weight="{weight}" font-style="{style}" font-size="{font_px}" fill="{fill}" text-anchor="{anchor}">{content}</text>"#,

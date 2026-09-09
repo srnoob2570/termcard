@@ -1,29 +1,29 @@
 {
-  "compilerOptions": {
-    "target": "ES2021",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "lib": ["ES2021", "DOM"],
-    "skipLibCheck": true,
+    "compilerOptions": {
+        "target": "ES2021",
+        "useDefineForClassFields": true,
+        "module": "ESNext",
+        "lib": ["ES2021", "DOM"],
+        "skipLibCheck": true,
 
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
 
-    /* Paths */
-    "paths": {
-      "@/*": ["./src/*"]
+        /* Paths */
+        "paths": {
+            "@/*": ["./src/*"]
+        },
+
+        /* Linting */
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true
     },
-
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["src"]
+    "include": ["src"]
 }

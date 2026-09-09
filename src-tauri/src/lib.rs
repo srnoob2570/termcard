@@ -90,10 +90,10 @@ async fn run_capture(
     let result = tokio::task::spawn_blocking(move || {
         capture::run_command(&command, cwd.as_deref(), 240, 80, None)
             .map(|out: RunOutcome| {
-            serde_json::to_value(&out.capture)
-                .map_err(|e| capture::CaptureError(format!("serialización IR: {e}")))
-        })
-        .and_then(|v| v)
+                serde_json::to_value(&out.capture)
+                    .map_err(|e| capture::CaptureError(format!("serialización IR: {e}")))
+            })
+            .and_then(|v| v)
     })
     .await
     .map_err(|e| e.to_string())?;
