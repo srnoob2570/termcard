@@ -2,6 +2,28 @@
 
 Type a shell command, run it in a PTY inside the app, and export the terminal screen as a macOS-style card (PNG 2×/3×/4× or SVG). Sensitive strings (home path, username, hostname) are redacted at render time with editable regex rules. Similar to [termshot](https://github.com/homeport/termshot), but with a GUI.
 
+## Screenshots
+
+ANSI 256-color palette dump:
+
+![ANSI 256-color palette](docs/images/ansi-256.png)
+
+Git history with decorations:
+
+![Git log](docs/images/git-log.png)
+
+Real API request through `jq`:
+
+![jq output](docs/images/jq-github.png)
+
+Project tree:
+
+![Project tree](docs/images/tree-src.png)
+
+Error capture (Python traceback):
+
+![Python traceback](docs/images/python-traceback.png)
+
 ## How it works
 
 - The command runs under `$SHELL -c` in a pseudo-terminal (`portable-pty`), with `TERM=xterm-256color` and `COLORTERM=truecolor`, so colors and emoji render as they would in a real terminal.
