@@ -96,6 +96,8 @@ export const api = {
     theme: Theme,
     scale: number,
   ): Promise<string> => invoke("export_png", { capture, theme, scale }),
+  exportSvg: (capture: Capture, theme: Theme): Promise<string> =>
+    invoke("export_svg", { capture, theme }),
   defaultRules: (): Promise<RedactRule[]> => invoke("default_rules"),
   getHome: (): Promise<string> => invoke("get_home"),
   savePng: (base64Png: string, suggestedName: string): Promise<string> =>

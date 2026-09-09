@@ -48,7 +48,7 @@ import {
   type RedactRule,
   type Theme,
 } from "@/api";
-import { defaultPrefs, esc, renderCaptureHtml } from "@/preview";
+import { defaultPrefs } from "@/preview";
 
 const PRESET_LABELS: Record<string, string> = {
   "mac-dark": "Mac oscuro",
@@ -88,54 +88,11 @@ const PRESET_OVERRIDES: Record<string, Partial<Theme>> = {
   },
 };
 
-const ANSI_PALETTES: Record<string, string[]> = {
-  "mac-dark": [
-    "#45475a", "#f38ba8", "#a6e3a1", "#f9e2af",
-    "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de",
-    "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af",
-    "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8",
-  ],
-  "mac-light": [
-    "#5c5f77", "#d20f39", "#40a02b", "#df8e1d",
-    "#1e66f5", "#ea76cb", "#179299", "#8c8fa1",
-    "#6c6f85", "#d20f39", "#40a02b", "#df8e1d",
-    "#1e66f5", "#ea76cb", "#179299", "#9ca0b0",
-  ],
-  minimal: [
-    "#585858", "#d75f5f", "#5faf5f", "#d7af5f",
-    "#5f87d7", "#d787d7", "#5fafaf", "#bcbcbc",
-    "#6c6c6c", "#ff5f5f", "#87d787", "#ffffaf",
-    "#87afff", "#ffafff", "#87d7d7", "#e4e4e4",
-  ],
-  solarized: [
-    "#073642", "#dc322f", "#859900", "#b58900",
-    "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-    "#002b36", "#cb4b16", "#586e75", "#657b83",
-    "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
-  ],
-};
-
-function applyPalette(preset: string): void {
-  const palette = ANSI_PALETTES[preset] ?? ANSI_PALETTES["mac-dark"];
-  palette.forEach((c, i) => document.documentElement.style.setProperty(`--ansi-${i}`, c));
-}
-
-function cardVars(t: Theme): React.CSSProperties {
-  return {
-    "--tc-bg": t.background,
-    "--tc-fg": t.foreground,
-    "--tc-accent": t.accent,
-    "--tc-radius": `${t.cornerRadius}px`,
-    "--tc-padding": `${t.padding}px`,
-    "--tc-font-size": `${t.fontSize}px`,
-    "--tc-shadow": t.showShadow ? "0 8px 32px rgba(0,0,0,0.35)" : "none",
-  } as React.CSSProperties;
-}
-
 export default function App() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [capture, setCapture] = useState<Capture | null>(null);
   const [running, setRunning] = useState(false);
+  const [svg, setSvg] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [status, setStatusState] = useState<{ msg: string; err: boolean }>({ msg: "Cargando…", err: false });
   const setStatus = (msg: string, err = false) => setStatusState({ msg, err });
@@ -167,7 +124,22 @@ export default function App() {
     })();
   }, []);
 
-  useEffect(() => applyPalette(prefs.theme.preset), [prefs.theme.preset]);
+
+  // El preview ES el SVG que se exporta: cero divergencia posible.
+  useEffect(() => {
+    if (!capture) {
+      setSvg(null);
+      return;
+    }
+    let alive = true;
+    void api
+      .exportSvg(capture, prefs.theme)
+      .then((s) => alive && setSvg(s))
+      .catch(() => alive && setSvg(null));
+    return () => {
+      alive = false;
+    };
+  }, [capture, prefs.theme]);
 
   const patchPrefs = useCallback((patch: Partial<Prefs>) => {
     setPrefs((p) => {
@@ -255,7 +227,6 @@ export default function App() {
   };
 
   const t = prefs.theme;
-  const body = capture ? renderCaptureHtml(capture, t) : "";
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -542,39 +513,11 @@ export default function App() {
         </div>
 
         <div className="flex flex-1 items-start justify-center overflow-auto p-8 [background:repeating-conic-gradient(#1a1a24_0%_25%,#14141c_0%_50%)_0_0/24px_24px]">
-          {capture ? (
-            <div style={{ padding: t.outerMargin }}>
-              <div
-                className="min-w-[420px] max-w-full overflow-hidden rounded-[var(--tc-radius)] font-mono leading-[1.2] shadow-[var(--tc-shadow)]"
-                style={{
-                  ...cardVars(t),
-                  background: t.background,
-                  color: t.foreground,
-                  borderRadius: t.cornerRadius,
-                  fontSize: t.fontSize,
-                }}
-              >
-              {t.showTrafficLights && (
-                <div className="relative flex items-center px-[var(--tc-padding)] pt-3">
-                  <div className="flex gap-2">
-                    <span className="size-3 rounded-full bg-[#ff5f57]" />
-                    <span className="size-3 rounded-full bg-[#febc2e]" />
-                    <span className="size-3 rounded-full bg-[#28c840]" />
-                  </div>
-                  {t.title && (
-                    <span
-                      className="absolute left-1/2 -translate-x-1/2 text-[0.85em] opacity-65 whitespace-nowrap"
-                      dangerouslySetInnerHTML={{ __html: esc(t.title) }}
-                    />
-                  )}
-                </div>
-              )}
-              <div
-                className="px-[var(--tc-padding)] pb-[var(--tc-padding)] pt-3 whitespace-pre"
-                dangerouslySetInnerHTML={{ __html: body }}
-              />
-              </div>
-            </div>
+          {svg ? (
+            <div
+              className="max-w-full [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:drop-shadow-2xl"
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
           ) : (
             <Empty className="mt-16 border-none">
               <EmptyHeader>

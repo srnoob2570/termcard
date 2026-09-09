@@ -148,6 +148,14 @@ fn export_png(capture: serde_json::Value, theme: Theme, scale: u32) -> Result<St
     Ok(base64::engine::general_purpose::STANDARD.encode(png))
 }
 
+/// SVG exacto que el exportador rasteriza; el preview lo muestra tal cual,
+/// así preview y PNG no pueden divergir.
+#[tauri::command]
+fn export_svg(capture: serde_json::Value, theme: Theme) -> Result<String, String> {
+    let cap: ir::Capture = serde_json::from_value(capture).map_err(|e| e.to_string())?;
+    Ok(export::render_svg(&cap, &theme, &Palette::default(), 1))
+}
+
 /// Reglas por defecto generadas del entorno real del usuario.
 #[tauri::command]
 fn default_rules() -> Vec<redact::RedactRule> {
@@ -207,6 +215,7 @@ pub fn run() {
             run_capture,
             stop_capture,
             export_png,
+            export_svg,
             default_rules,
             get_home,
             save_png

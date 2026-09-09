@@ -155,7 +155,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
                 ty,
                 &escape_xml(&theme.title),
                 &theme.foreground,
-                scale,
+                fs * 0.85,
                 &TextStyle {
                     bold: false,
                     italic: false,
@@ -173,7 +173,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         y,
         &escape_xml(&prompt),
         &theme.accent,
-        scale,
+        fs,
         &TextStyle {
             bold: true,
             italic: false,
@@ -204,7 +204,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
                 y,
                 &escape_xml(&run.text),
                 &fill,
-                scale,
+                fs,
                 &TextStyle {
                     bold: run.bold,
                     italic: run.italic,
@@ -228,11 +228,17 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     svg
 }
 
-fn text(x: f32, y: f32, content: &str, fill: &str, scale: u32, style: &TextStyle) -> String {
+fn text(
+    x: f32,
+    y: f32,
+    content: &str,
+    fill: &str,
+    font_px: f32,
+    style: &TextStyle,
+) -> String {
     let family = font_family();
     format!(
-        r#"<text xml:space="preserve" x="{x}" y="{y}" font-family="{family}" font-weight="{weight}" font-style="{style}" font-size="{fs}" fill="{fill}" text-anchor="{anchor}">{content}</text>"#,
-        fs = 14.0 * scale as f32,
+        r#"<text xml:space="preserve" x="{x}" y="{y}" font-family="{family}" font-weight="{weight}" font-style="{style}" font-size="{font_px}" fill="{fill}" text-anchor="{anchor}">{content}</text>"#,
         weight = if style.bold { "bold" } else { "normal" },
         style = if style.italic { "italic" } else { "normal" },
         anchor = style.anchor,
