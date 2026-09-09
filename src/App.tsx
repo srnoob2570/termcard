@@ -275,11 +275,10 @@ export default function App() {
     return (
         <div className="flex h-screen overflow-hidden">
             {/* Left panel */}
-            <aside className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
+            <aside className="flex w-90 shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
                 <div className="mb-4 flex items-center gap-2">
                     <Terminal className="size-5 text-primary" />
                     <h1 className="text-base font-semibold tracking-tight">termcard</h1>
-                    {/* Language selector: persisted in prefs.lang. */}
                     <Select
                         value={prefs.lang}
                         onValueChange={(v) => v && patchPrefs({ lang: v as Lang })}
@@ -315,6 +314,12 @@ export default function App() {
                                 placeholder="ls --color=auto -la"
                                 value={prefs.command}
                                 onChange={(e) => patchPrefs({ command: e.target.value })}
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                autoComplete="off"
+                                spellCheck={false}
+                                data-gramm="false"
+                                data-enable-grammar="false"
                             />
                         </Field>
                         <Field>
@@ -327,6 +332,10 @@ export default function App() {
                                 placeholder="~/"
                                 value={prefs.cwd}
                                 onChange={(e) => patchPrefs({ cwd: e.target.value })}
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                autoComplete="off"
+                                spellCheck={false}
                             />
                         </Field>
                     </FieldGroup>
@@ -611,14 +620,14 @@ export default function App() {
                 </div>
             </aside>
 
-            <main className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col">
                 <div className="flex items-center gap-2 border-b px-4 py-2.5">
                     <Label className="text-xs">{msg("labelScale")}</Label>
                     <Select
                         value={String(prefs.scale)}
                         onValueChange={(v) => patchPrefs({ scale: Number(v) })}
                     >
-                        <SelectTrigger className="h-8 w-[72px]">
+                        <SelectTrigger className="h-8 w-18">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -644,7 +653,7 @@ export default function App() {
                 <div className="flex flex-1 items-start justify-center overflow-auto p-8 [background:repeating-conic-gradient(#1a1a24_0%_25%,#14141c_0%_50%)_0_0/24px_24px]">
                     {svg ? (
                         <div
-                            className="max-w-full [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:drop-shadow-2xl"
+                            className="max-w-full [&>svg]:h-auto [&>svg]:max-w-full"
                             dangerouslySetInnerHTML={{ __html: svg }}
                         />
                     ) : (
@@ -671,7 +680,7 @@ export default function App() {
                 >
                     {status.msg}
                 </footer>
-            </main>
+            </div>
         </div>
     );
 }
