@@ -257,6 +257,21 @@ export default function App() {
     const removeRule = (i: number) => {
         patchPrefs({ rules: prefs.rules.filter((_, j) => j !== i) });
     };
+    // The width input is free-text: the user can clear it and type from
+    // scratch without the field snapping back mid-edit. The value commits to
+    // the theme on blur/Enter, clamped to the valid range.
+    const [draftWidth, setDraftWidth] = useState<string | null>(null);
+    const commitWidth = () => {
+        if (draftWidth === null) return;
+        setDraftWidth(null);
+        const n = Number.parseInt(draftWidth, 10);
+        if (Number.isNaN(n)) return;
+        patchTheme({ cardWidth: Math.min(4096, Math.max(100, n)) });
+    };
+
+    const restoreRules = async () => {
+        patchPrefs({ rules: await api.defaultRules() });
+    };
     const addRule = () => {
         patchPrefs({
             rules: [
@@ -264,10 +279,6 @@ export default function App() {
                 { pattern: "", replacement: "", enabled: true, isDefault: false },
             ],
         });
-    };
-
-    const restoreRules = async () => {
-        patchPrefs({ rules: await api.defaultRules() });
     };
 
     const t = prefs.theme;
@@ -581,6 +592,39 @@ export default function App() {
                                 onChange={(e) =>
                                     patchTheme({ outerMargin: Number(e.target.value) || 0 })
                                 }
+                            />
+                        </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div>
+                            <Label className="text-xs">{msg("labelWidth")}</Label>
+                            <Select
+                                value={t.cardWidth === null ? "auto" : "manual"}
+                                onValueChange={(v) => {
+                                    setDraftWidth(null);
+                                    patchTheme({ cardWidth: v === "manual" ? 160 : null });
+                                }}
+                            >
+                                <SelectTrigger className="mt-1 h-8 w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="auto">{msg("widthAuto")}</SelectItem>
+                                    <SelectItem value="manual">{msg("widthManual")}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className="text-xs">px</Label>
+                            <Input
+                                className="mt-1 h-8"
+                                inputMode="numeric"
+                                disabled={t.cardWidth === null}
+                                value={draftWidth ?? t.cardWidth ?? 160}
+                                onChange={(e) => setDraftWidth(e.target.value)}
+                                onBlur={commitWidth}
+                                onKeyDown={(e) => e.key === "Enter" && commitWidth()}
+                                placeholder="160"
                             />
                         </div>
                     </div>
