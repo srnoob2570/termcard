@@ -3,8 +3,8 @@ use crate::theme::{Palette, Theme};
 use base64::Engine as _;
 use std::sync::LazyLock;
 
-/// Métricas de JetBrains Mono: ancho de avance = 0.6 × tamaño de fuente,
-/// alto de línea recomendado = 1.2 × tamaño de fuente.
+/// JetBrains Mono metrics: advance width = 0.6 × font size,
+/// recommended line height = 1.2 × font size.
 const CH_WIDTH: f32 = 0.6;
 const LINE_HEIGHT: f32 = 1.2;
 
@@ -32,7 +32,7 @@ pub fn font_family() -> &'static str {
     "JetBrains Mono"
 }
 
-/// Dimensiones lógicas de la tarjeta (unidades del SVG base).
+/// Logical dimensions of the card (units of the base SVG).
 pub struct Layout {
     pub width: f32,
     pub height: f32,
@@ -40,18 +40,18 @@ pub struct Layout {
 
 pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     let line_h = theme.font_size as f32 * LINE_HEIGHT;
-    // Líneas visibles: prompt + salida (se recortan filas vacías finales).
-    let visible = capture.visible_lines().count() + 1; // + línea de prompt
+    // Visible lines: prompt + output (trailing empty rows get trimmed).
+    let visible = capture.visible_lines().count() + 1; // + prompt line
     let chrome = if theme.show_traffic_lights {
         44.0
     } else {
         16.0
     };
     let pad = theme.padding as f32;
-    // Hueco reservado alrededor de la ventana para que la sombra respire.
+    // Gap reserved around the window so the shadow can breathe.
     let shadow_gap = if theme.show_shadow { 8.0 } else { 0.0 };
-    let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // a cada lado
-                                                                    // Ancho automático: línea más larga (incluido el prompt) + padding.
+    let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // per side
+                                                                    // Automatic width: longest line (prompt included) + padding.
     let prompt_len = capture.command_line.chars().count() + 2; // "❯ "
     let longest = capture
         .visible_lines()
@@ -65,7 +65,7 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
 }
 
 impl Capture {
-    /// Filas sin las vacías al final (la terminal siempre reporta las 30).
+    /// Rows minus the trailing empty ones (the terminal always reports all 30).
     pub fn visible_lines(&self) -> impl Iterator<Item = &Line> {
         let last_content = self
             .lines
@@ -76,7 +76,7 @@ impl Capture {
     }
 }
 
-/// Genera el SVG completo de la tarjeta. `scale` multiplica dimensiones.
+/// Renders the full SVG of the card. `scale` multiplies dimensions.
 pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u32) -> String {
     let layout = layout(capture, theme);
     let w = layout.width * scale as f32;
@@ -91,7 +91,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         16.0 * scale as f32
     };
     let radius = theme.corner_radius as f32 * scale as f32;
-    // Origen de la ventana: margen exterior + hueco de sombra.
+    // Window origin: outer margin + shadow gap.
     let win_inset = margin
         + if theme.show_shadow {
             8.0 * scale as f32
@@ -112,16 +112,16 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         wh = h - win_inset * 2.0,
     ));
 
-    // Fondo exterior (backdrop). El tema guarda el fill como string: "transparent",
-    // "#rrggbb" o "rgba(r,g,b,a)". resvg y Chromium resuelven los tres nativamente
-    // (verificado: transparent → alpha 0; rgba → alpha preservada), así que no hay
-    // que traducir nada: un rect sin pintar sería equivalente a alpha 0.
+    // Outer background (backdrop). The theme stores the fill as a string: "transparent",
+    // "#rrggbb" or "rgba(r,g,b,a)". resvg and Chromium resolve all three natively
+    // (verified: transparent → alpha 0; rgba → alpha preserved), so nothing
+    // needs translating: an unpainted rect would be equivalent to alpha 0.
     svg.push_str(&format!(
         r#"<rect width="{w}" height="{h}" fill="{}"/>"#,
         escape_xml(&theme.backdrop)
     ));
 
-    // Sombra: crece 8px alrededor de la ventana, dentro del margen.
+    // Shadow: grows 8px around the window, inside the margin.
     if theme.show_shadow {
         svg.push_str(&format!(
             r#"<rect x="{sx}" y="{sy}" width="{sw}" height="{sh}" rx="{radius}" fill="black" opacity="0.35" filter="url(#blur)"/>"#,
@@ -142,7 +142,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         bg = theme.background,
     ));
 
-    // Barra de título + traffic lights.
+    // Title bar + traffic lights.
     if theme.show_traffic_lights {
         let cy = win_inset + 20.0 * scale as f32;
         let lx = win_inset + pad;
@@ -171,7 +171,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
         }
     }
 
-    // Línea de prompt.
+    // Prompt line.
     let mut y = win_inset + chrome + line_h * 0.8;
     let prompt = format!("{} {}", theme.prompt_symbol, capture.command_line);
     svg.push_str(&text(
@@ -188,7 +188,7 @@ pub fn render_svg(capture: &Capture, theme: &Theme, palette: &Palette, scale: u3
     ));
     y += line_h;
 
-    // Cuerpo: runs de la captura.
+    // Body: runs of the capture.
     for line in capture.visible_lines() {
         let mut x = win_inset + pad;
         for run in &line.runs {
@@ -285,7 +285,7 @@ fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Rasteriza la captura a PNG con resvg. `scale` es 2, 3 o 4.
+/// Rasterizes the capture to PNG with resvg. `scale` is 2, 3 or 4.
 pub fn render_png(
     capture: &Capture,
     theme: &Theme,
@@ -305,12 +305,12 @@ pub fn render_png(
         fontdb: std::sync::Arc::new(fontdb),
         ..Default::default()
     };
-    let tree = usvg::Tree::from_str(&svg, &opt).map_err(|e| format!("SVG inválido: {e}"))?;
+    let tree = usvg::Tree::from_str(&svg, &opt).map_err(|e| format!("invalid SVG: {e}"))?;
 
     let size = tree.size();
     let mut pixmap =
         tiny_skia::Pixmap::new(size.width().round() as u32, size.height().round() as u32)
-            .ok_or("dimensiones de pixmap inválidas")?;
+            .ok_or("invalid pixmap dimensions")?;
 
     resvg::render(
         &tree,
@@ -319,7 +319,7 @@ pub fn render_png(
     );
     pixmap
         .encode_png()
-        .map_err(|e| format!("fallo al codificar PNG: {e}"))
+        .map_err(|e| format!("failed to encode PNG: {e}"))
 }
 
 #[cfg(test)]
@@ -374,14 +374,14 @@ mod tests {
         let (w1, h1) = png_dims(&png1);
         let (w2, h2) = png_dims(&png2);
         let (w3, h3) = png_dims(&png3);
-        // El ancho de la ventana es float; 2x/3x pueden diferir ±1 px por redondeo.
+        // The window width is float; 2x/3x may differ ±1 px from rounding.
         assert!(((w2 as i64) - (w1 as i64) * 2).abs() <= 1);
         assert!(((h2 as i64) - (h1 as i64) * 2).abs() <= 1);
         assert!(((w3 as i64) - (w1 as i64) * 3).abs() <= 1);
         assert!(((h3 as i64) - (h1 as i64) * 3).abs() <= 1);
     }
 
-    /// Lee (width, height) del IHDR de un PNG.
+    /// Reads (width, height) from a PNG's IHDR.
     fn png_dims(png: &[u8]) -> (u32, u32) {
         let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
         (be(&png[16..20]), be(&png[20..24]))

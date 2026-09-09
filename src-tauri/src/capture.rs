@@ -5,7 +5,7 @@ use portable_pty::{CommandBuilder, PtySize};
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-/// Límites de la captura.
+/// Capture limits.
 pub const MAX_BUFFER: usize = 5 * 1024 * 1024; // 5 MB
 pub const TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -20,7 +20,7 @@ impl std::fmt::Display for CaptureError {
 
 impl std::error::Error for CaptureError {}
 
-/// Resultado de ejecutar un comando en PTY.
+/// Result of running a command in a PTY.
 #[derive(Debug)]
 pub struct RunOutcome {
     pub capture: Capture,
@@ -29,9 +29,9 @@ pub struct RunOutcome {
     pub timed_out: bool,
 }
 
-/// Ejecuta `command` con `$SHELL -c`, captura la salida cruda ANSI y la
-/// convierte al IR. Bloquea hasta que el proceso termina, se alcanza el
-/// timeout o se señala stop.
+/// Runs `command` with `$SHELL -c`, captures the raw ANSI output and
+/// converts it to the IR. Blocks until the process exits, the timeout is
+/// reached or the stop flag is set.
 pub fn run_command(
     command: &str,
     cwd: Option<&str>,
@@ -63,7 +63,7 @@ pub fn run_command(
         .slave
         .spawn_command(cmd)
         .map_err(|e| CaptureError(e.to_string()))?;
-    drop(pair.slave); // El padre no necesita el slave tras el spawn.
+    drop(pair.slave); // The parent doesn't need the slave after the spawn.
 
     let mut reader = pair
         .master
@@ -89,7 +89,7 @@ pub fn run_command(
             break;
         }
         match reader.read(&mut buf) {
-            Ok(0) => break, // EOF: el proceso cerró la PTY.
+            Ok(0) => break, // EOF: the process closed the PTY.
             Ok(n) => {
                 if raw.len() + n <= MAX_BUFFER {
                     raw.extend_from_slice(&buf[..n]);
@@ -153,7 +153,7 @@ mod tests {
             .iter()
             .map(|r| r.text.as_str())
             .collect();
-        assert!(text.contains("tmp"), "pwd devolvió: {text}");
+        assert!(text.contains("tmp"), "pwd returned: {text}");
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
         let stop = std::sync::Arc::new(AtomicBool::new(false));
         let stop_thread = stop.clone();
         let handle = std::thread::spawn(move || {
-            // El main activa la bandera tras un delay; run_command la consulta.
+            // The main thread sets the flag after a delay; run_command checks it.
             std::thread::sleep(Duration::from_millis(150));
             stop_thread.store(true, std::sync::atomic::Ordering::Relaxed);
             run_command("sleep 60", None, 80, 24, Some(&stop)).unwrap()
@@ -178,8 +178,8 @@ mod tests {
 
     #[test]
     fn timeout_kills_sleep() {
-        // No esperamos 120 s: verificamos el mecanismo con un timeout propio
-        // de hilo; el comando colgado se queda sin lector y el test muere rápido.
+        // We don't wait 120 s: we verify the mechanism with our own thread
+        // timeout; the hung command is left without a reader and the test dies fast.
         let handle = std::thread::spawn(|| run_command("sleep 0.2; echo done", None, 80, 24, None));
         let out = handle.join().unwrap().unwrap();
         assert!(out

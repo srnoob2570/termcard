@@ -1,10 +1,10 @@
 /**
- * i18n minimalista de la UI: diccionarios planos tipados para español e
- * inglés. Sin librería (dos idiomas, medio centenar de claves no justifican
- * una dependencia). El idioma vive en `Prefs.lang` (JSON opaco para Rust),
- * se detecta del sistema en el primer arranque y persiste en el store.
- * Las cadenas de error del backend Rust quedan en español a propósito: el
- * frontend las envuelve con `statusError`/`statusExportError`.
+ * Minimal i18n for the UI: flat typed dictionaries for Spanish and
+ * English. No library (two languages, fifty-odd keys don't justify
+ * a dependency). The language lives in `Prefs.lang` (JSON opaque to Rust),
+ * is detected from the system on first run and persisted in the store.
+ * Rust backend error strings are in English on purpose: the
+ * frontend wraps them with `statusError`/`statusExportError`.
  */
 
 export type Lang = "es" | "en";
@@ -14,14 +14,14 @@ export const LANGS: { id: Lang; label: string }[] = [
     { id: "en", label: "English" },
 ];
 
-/** Idioma del sistema: es-* → "es", cualquier otra cosa → "en" (fallback). */
+/** System language: es-* → "es", anything else → "en" (fallback). */
 export function detectLang(): Lang {
     const l = (navigator.languages?.[0] ?? navigator.language ?? "en").toLowerCase();
     return l.startsWith("es") ? "es" : "en";
 }
 
-// El español es la fuente de las claves; tipar `en` contra `typeof es`
-// obliga a paridad de claves: tsc falla si un diccionario diverge.
+// Spanish is the key source; typing `en` against `typeof es`
+// forces key parity: tsc fails if a dictionary diverges.
 const es = {
     statusLoading: "Cargando…",
     statusReady: "Listo.",
@@ -128,7 +128,7 @@ const en: typeof es = {
 
 export type MessageKey = keyof typeof es;
 
-/** Interpolación simple: "{n}" → params.n. Parámetro ausente → cadena vacía. */
+/** Simple interpolation: "{n}" → params.n. Missing parameter → empty string. */
 export function translate(
     lang: Lang,
     key: MessageKey,

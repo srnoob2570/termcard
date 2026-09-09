@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use vt100::Color as VtColor;
 
-/// Color de una celda en el IR. `Default` = color de primer plano del tema;
-/// `DefaultInverted` = fondo del tema (video inverso).
+/// Color of a cell in the IR. `Default` = the theme's foreground color;
+/// `DefaultInverted` = the theme's background (reverse video).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Color {
@@ -12,7 +12,7 @@ pub enum Color {
     DefaultInverted,
 }
 
-/// Tramo de texto contiguo con estilo uniforme.
+/// Contiguous span of text with uniform style.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Run {
@@ -30,7 +30,7 @@ pub struct Line {
     pub runs: Vec<Run>,
 }
 
-/// Captura completa: grilla lógica + línea de comando a mostrar.
+/// Full capture: logical grid + command line to display.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capture {
@@ -50,11 +50,11 @@ impl Line {
     }
 }
 
-/// Convierte la pantalla final de un `vt100::Parser` en el IR.
+/// Converts the final screen of a `vt100::Parser` into the IR.
 ///
-/// Recorre celda por celda (`Screen::cell` es el único acceso público),
-/// omite continuaciones de caracteres anchos y fusiona celdas contiguas
-/// con estilo idéntico en un solo run.
+/// Walks cell by cell (`Screen::cell` is the only public access),
+/// skips wide-character continuations and merges contiguous cells
+/// with identical style into a single run.
 pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
     let screen = parser.screen();
     let (rows, cols) = screen.size();
@@ -92,9 +92,9 @@ pub fn from_vt100(parser: &vt100::Parser, command_line: String) -> Capture {
 }
 
 impl Capture {
-    /// Recorta la captura al contenido: elimina filas vacías finales y
-    /// ajusta `cols` al ancho real del contenido. `rows` queda con las
-    /// filas con contenido.
+    /// Trims the capture to its content: removes trailing empty rows and
+    /// adjusts `cols` to the real content width. `rows` ends up with the
+    /// rows that have content.
     pub fn trimmed(mut self) -> Self {
         let last_content = self
             .lines
@@ -115,9 +115,9 @@ impl Capture {
     }
 }
 
-/// Mapea los colores vt100 al IR. Con video inverso, primer plano y fondo
-/// se intercambian; `Default` invertido se representa con `DefaultInverted`
-/// para que ambos renderizadores lo resuelvan contra el tema.
+/// Maps vt100 colors to the IR. With reverse video, foreground and background
+/// are swapped; an inverted `Default` is represented as `DefaultInverted`
+/// so both renderers resolve it against the theme.
 fn convert_colors(fg: VtColor, bg: VtColor, inverse: bool) -> (Option<Color>, Option<Color>) {
     if inverse {
         (to_color(bg, true), to_color(fg, true))
@@ -135,7 +135,7 @@ fn to_color(c: VtColor, inverted: bool) -> Option<Color> {
     }
 }
 
-/// Fusiona runs adyacentes con estilo idéntico para reducir el IR.
+/// Merges adjacent runs with identical style to shrink the IR.
 fn merge_run(runs: &mut Vec<Run>, next: Run) {
     if let Some(last) = runs.last_mut() {
         if last.fg == next.fg

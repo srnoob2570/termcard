@@ -1,17 +1,17 @@
-//! Harness de diagnóstico: renderiza una fixture a SVG y PNG con el pipeline
-//! real de export y escribe los artefactos en /tmp/termcard-debug para medir
-//! geometría (margen, radio, padding) contra lo esperado del tema.
+//! Diagnostic harness: renders a fixture to SVG and PNG with the real export
+//! pipeline and writes the artifacts to /tmp/termcard-debug to measure
+//! geometry (margin, radius, padding) against what the theme expects.
 //!
-//! Uso: cargo test -p termcard --test export_probe -- --nocapture
-//! No es una prueba de regresión: se elimina tras el diagnóstico.
+//! Usage: cargo test -p termcard --test export_probe -- --nocapture
+//! Not a regression test: it is removed after the diagnosis.
 
 use termcard_lib::export::{layout, render_png, render_svg};
 use termcard_lib::ir::{Capture, Color, Line, Run};
 use termcard_lib::theme::{Palette, Theme};
 
 fn fixture() -> (Capture, Theme, Palette) {
-    // Imita la tarjeta del usuario: prompt + líneas con runs de color,
-    // barra de progreso con bg, flechas y símbolos no-ASCII, línea larga.
+    // Imitates the user's card: prompt + lines with colored runs,
+    // progress bar with bg, arrows and non-ASCII symbols, long line.
     let run = |text: &str, fg: Option<Color>, bg: Option<Color>, bold: bool| Run {
         text: text.to_string(),
         fg,
@@ -66,8 +66,8 @@ fn fixture() -> (Capture, Theme, Palette) {
 
 #[test]
 fn probe_no_shadow_case() {
-    // Solarized/Minimal: show_shadow=false. El texto debe quedar dentro del
-    // padding derecho (sin overflow) y el margen sigue presente.
+    // Solarized/Minimal: show_shadow=false. The text must stay within the
+    // right padding (no overflow) and the margin is still present.
     let (cap, mut theme, palette) = fixture();
     theme.show_shadow = false;
     let lay = layout(&cap, &theme);
@@ -75,9 +75,9 @@ fn probe_no_shadow_case() {
     std::fs::create_dir_all("/tmp/termcard-debug").unwrap();
     std::fs::write("/tmp/termcard-debug/noshadow.svg", &svg).unwrap();
     println!("no-shadow layout: {}x{}", lay.width, lay.height);
-    let win_inset = theme.outer_margin as f32; // sin hueco de sombra
+    let win_inset = theme.outer_margin as f32; // no shadow gap
     println!(
-        "win_inset={} → área de texto: {}..{} (px@2x: {}..{})",
+        "win_inset={} → text area: {}..{} (px@2x: {}..{})",
         win_inset,
         win_inset + theme.padding as f32,
         lay.width - win_inset - theme.padding as f32,
@@ -117,7 +117,7 @@ fn probe_no_shadow_case() {
     println!("max text x = {mx}, right pad edge px = {pad_right_px}");
     assert!(
         (mx as f32) <= pad_right_px + 1.0,
-        "texto desborda el padding derecho: {mx} > {pad_right_px}"
+        "text overflows the right padding: {mx} > {pad_right_px}"
     );
 }
 
@@ -125,9 +125,9 @@ fn probe_no_shadow_case() {
 fn probe_dumps_artifacts() {
     let (cap, theme, palette) = fixture();
     let lay = layout(&cap, &theme);
-    println!("layout logico: {}x{}", lay.width, lay.height);
+    println!("logical layout: {}x{}", lay.width, lay.height);
     println!(
-        "esperado: win_inset={} (margin {} + sombra 8), pad={}, radius={}",
+        "expected: win_inset={} (margin {} + shadow 8), pad={}, radius={}",
         theme.outer_margin + 8,
         theme.outer_margin,
         theme.padding,
@@ -139,50 +139,51 @@ fn probe_dumps_artifacts() {
         let path = format!("/tmp/termcard-debug/scale{scale}.svg");
         std::fs::create_dir_all("/tmp/termcard-debug").unwrap();
         std::fs::write(&path, &svg).unwrap();
-        println!("svg escala {scale}: {} bytes → {path}", svg.len());
-        // Cabecera con dimensiones para verificar viewBox.
+        println!("svg scale {scale}: {} bytes → {path}", svg.len());
+        // Header with dimensions to verify the viewBox.
         let head: String = svg.chars().take(220).collect();
-        println!("cabecera svg {scale}: {head}");
+        println!("svg header {scale}: {head}");
     }
 
     let png = render_png(&cap, &theme, &palette, 2).expect("png");
     let path = "/tmp/termcard-debug/scale2.png";
     std::fs::write(path, &png).unwrap();
-    println!("png escala 2: {} bytes → {path}", png.len());
+    println!("png scale 2: {} bytes → {path}", png.len());
 
-    // Medición geométrica con el crate image (dev-dependency).
+    // Geometric measurement with the image crate (dev-dependency).
     let img = image::load_from_memory(&png).unwrap().to_rgba8();
     let (w, h) = img.dimensions();
     println!(
-        "png dims: {w}x{h} (esperado {}x{})",
+        "png dims: {w}x{h} (expected {}x{})",
         lay.width * 2.0,
         lay.height * 2.0
     );
 
     let alpha_at = |x: u32, y: u32| img.get_pixel(x, y).0[3];
-    // Margen: en (2,2) debe ser transparente (backdrop transparent + margen 16*2).
-    println!("alpha(2,2)={:?} (margen: esperado 0)", alpha_at(2, 2));
-    // Esquina de la ventana: (win_inset*2, win_inset*2) cae FUERA del radio → 0.
+    // Margin: at (2,2) it must be transparent (transparent backdrop + 16*2 margin).
+    println!("alpha(2,2)={:?} (margin: expected 0)", alpha_at(2, 2));
+    // Window corner: (win_inset*2, win_inset*2) falls OUTSIDE the radius → 0.
     let wi = (theme.outer_margin + 8) * 2;
     println!(
-        "alpha({wi},{wi})={:?} (esquina redondeada: esperado 0)",
+        "alpha({wi},{wi})={:?} (rounded corner: expected 0)",
         alpha_at(wi, wi)
     );
-    // Justo dentro del borde derecho de la ventana: opaco.
+    // Just inside the right edge of the window: opaque.
     let win_right = (w as f32 / 2.0 - (theme.outer_margin + 8) as f32) as u32 - 2;
     let mid_y = h / 2;
     println!(
-        "alpha({win_right},{mid_y})={:?} (dentro de ventana: esperado 255)",
+        "alpha({win_right},{mid_y})={:?} (inside window: expected 255)",
         alpha_at(win_right, mid_y)
     );
-    // Borde izquierdo de la ventana (dentro, tras el radio): opaco.
+    // Left edge of the window (inside, past the radius): opaque.
     println!(
-        "alpha({},{mid_y})={:?} (dentro de ventana: esperado 255)",
+        "alpha({},{mid_y})={:?} (inside window: expected 255)",
         wi + 4,
         alpha_at(wi + 4, mid_y)
     );
 
-    // Primera columna opaca por fila central → margen real renderizado.
+    // First opaque column at the mid row → actual rendered margin.
+
     let mut first_opaque = None;
     for x in 0..w {
         if alpha_at(x, mid_y) > 8 {
@@ -191,15 +192,15 @@ fn probe_dumps_artifacts() {
         }
     }
     println!(
-        "primera columna opaca en y={mid_y}: {:?} (esperado ~{})",
+        "first opaque column at y={mid_y}: {:?} (expected ~{})",
         first_opaque,
         wi + 4
     );
 
-    // Bbox del texto: píxeles que no son ni backdrop ni bg de la ventana,
-    // muestreado en la línea del prompt (y = (win_inset + chrome + 0.5*line_h)*2).
-    // Aproximación: escanear toda la imagen y reportar extents de píxeles
-    // distintos del bg de ventana.
+    // Text bbox: pixels that are neither backdrop nor window background,
+    // sampled at the prompt line (y = (win_inset + chrome + 0.5*line_h)*2).
+    // Approximation: scan the whole image and report extents of pixels
+    // different from the window background.
     let bg = theme.background.clone();
     let hex = |s: &str| -> (u8, u8, u8) {
         let s = s.trim_start_matches('#');
@@ -228,7 +229,7 @@ fn probe_dumps_artifacts() {
         }
     }
     println!(
-        "bbox contenido x: [{min_x},{max_x}] (ventana: [{},{}/2-{}])",
+        "content bbox x: [{min_x},{max_x}] (window: [{},{}/2-{}])",
         wi + 4,
         w,
         wi + 4

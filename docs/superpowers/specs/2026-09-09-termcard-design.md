@@ -1,39 +1,40 @@
-# termcard — Diseño
+# termcard — Design
 
-Capturador de salida de terminal con tarjeta visual exportable, similar a
-[homeport/termshot](https://github.com/homeport/termshot) pero con interfaz
-gráfica, redacción de datos sensibles y variantes de estilo.
+Terminal output capture tool with an exportable visual card, similar to
+[homeport/termshot](https://github.com/homeport/termshot) but with a graphical
+interface, redaction of sensitive data, and style variants.
 
-Fecha: 2026-09-09 · Estado: aprobado por el usuario en chat
+Date: 2026-09-09 · Status: approved by the user in chat (original in Spanish, translated 2026-09-09)
 
-## Objetivo
+## Goal
 
-Ejecutar un comando en una PTY dentro de la app, capturar su salida, redactar
-datos sensibles (rutas, usuario, hostname) y exportar una tarjeta PNG en alta
-calidad con estilo configurable.
+Run a command in a PTY inside the app, capture its output, redact sensitive
+data (paths, username, hostname) and export a high-quality PNG card with
+configurable style.
 
 ## Stack
 
-- **Tauri 2 + TypeScript** (frontend vanilla TS + Vite, sin framework).
+- **Tauri 2 + TypeScript** (React 19 frontend + Vite; the spec originally said vanilla TS, the code settled on React).
 - Rust: `portable-pty`, `vt100`, `resvg`, `serde`.
-- Persistencia: `tauri-plugin-store`. Diálogos: `tauri-plugin-dialog`.
-- Fuente: JetBrains Mono (SIL OFL) embebida, usada por preview y export.
+- Persistence: hand-rolled `once_store` JSON blob (the spec originally named `tauri-plugin-store`, since removed). Dialogs: `tauri-plugin-dialog`.
+- Font: JetBrains Mono (SIL OFL) embedded, used by preview and export.
 
-## Arquitectura
+## Architecture
 
 ```mermaid
 flowchart LR
-    A[Comando + cwd + cols/rows] --> B[portable-pty\nTERM=xterm-256color]
-    B --> C[vt100: ANSI → grilla de celdas]
-    C --> D[IR: líneas de runs estilizados]
-    D --> E[Redacción: regex sobre texto]
-    E --> F[Preview HTML/CSS]
+    A[Command + cwd + cols/rows] --> B[portable-pty\nTERM=xterm-256color]
+    B --> C[vt100: ANSI → cell grid]
+    C --> D[IR: lines of styled runs]
+    D --> E[Redaction: regex over text]
+    E --> F[SVG preview]
     E --> G[SVG → resvg → PNG 2x/3x/4x]
 ```
 
-Principio central: **un único IR compartido**. El preview web y el exportador
-SVG son dos renderizadores independientes de la misma estructura; nunca se
-rasteriza el DOM.
+Core principle: **a single shared IR**. The web preview and the SVG exporter
+are two independent renderers of the same structure; the DOM is never
+rasterized. In practice the preview now renders the exporter's SVG directly,
+so there is exactly one renderer.
 
 ### IR
 
@@ -45,64 +46,68 @@ pub struct Capture { cols: u16, rows: u16, command_line: String, lines: Vec<Line
 pub enum Color { Indexed(u8), Rgb(u8, u8, u8), Default, DefaultInverted }
 ```
 
-Único payload cruzando el puente IPC (serde → JSON). `DefaultInverted` cubre
-video inverso (selecciones, menús de fzf).
+The only payload crossing the IPC bridge (serde → JSON). `DefaultInverted`
+covers reverse video (selections, fzf menus).
 
-### Captura (backend)
+### Capture (backend)
 
-`portable-pty` lanza `$SHELL -c <comando>` con cwd elegido, `TERM=xterm-256color`,
-`COLORTERM=truecolor`. Búfer tope 5 MB. Botón Stop + kill automático a los
-120 s. PTY se cierra tras la salida del proceso para capturar el flush final.
+`portable-pty` launches `$SHELL -c <command>` with the chosen cwd,
+`TERM=xterm-256color`, `COLORTERM=truecolor`. Buffer cap 5 MB. Stop button +
+automatic kill at 120 s. The PTY closes after the process exits to capture the
+final flush.
 
-### Redacción
+### Redaction
 
-Lista de reglas `{ regex, replacement, enabled, is_default }` aplicada sobre
-el texto de cada run y sobre la línea de comando mostrada. Tres reglas por
-defecto (generadas una vez al primer arranque, editables y desactivables):
-`/home/<usuario>` → `~`, nombre de usuario, hostname. Toggle temporal "mostrar
-sin censura" solo afecta el preview; el export siempre usa texto redactado.
-Regex: crate `regex`, sin soporte lookaround (limitación documentada).
+List of rules `{ regex, replacement, enabled, is_default }` applied over the
+text of every run and over the displayed command line. Three default rules
+(generated once on first run, editable and disableable):
+`/home/<user>` → `~`, username, hostname. The temporary "show uncensored"
+toggle only affects the preview; the export always uses redacted text.
+Redaction happens at render time on the serialized JSON (not at capture time),
+so editing rules updates the preview without re-capturing.
+Regex: `regex` crate, no lookaround support (documented limitation).
 
-### Prompt sintético
+### Synthetic prompt
 
-`$SHELL -c` no imprime prompt; la tarjeta antepone una línea `❯ <comando>`
-con el símbolo configurable. El comando mostrado pasa por las mismas reglas
-de redacción.
+`$SHELL -c` prints no prompt; the card prepends a `❯ <command>` line with a
+configurable symbol. The displayed command goes through the same redaction
+rules.
 
-### Temas y variantes
+### Themes and variants
 
-Presets: Mac dark, Mac light, Minimal, Solarized. Parámetros: acento, fondo,
-título de ventana, traffic lights, sombra, padding, radio, tamaño de fuente.
-Todos valores planos interpretados por ambos renderizadores.
+Presets: Mac dark, Mac light, Minimal, Solarized. Parameters: accent,
+background, window title, traffic lights, shadow, padding, radius, font size.
+All plain values interpreted by both renderers.
 
 ### UI
 
-Una ventana, dos columnas. Izquierda: comando, cwd, cols/rows (100×30 por
-defecto), reglas, botón Run (Ctrl+Enter). Derecha: tarjeta a tamaño real con
-escala-ajuste, controles de tema, export (escala 2x/3x/4x, nombre, guardado
-vía plugin dialog). UI en español, strings centralizados.
+One window, two columns. Left: command, cwd, cols/rows (100×30 default),
+rules, Run button (Ctrl+Enter). Right: card at real size with scale-to-fit,
+theme controls, export (2x/3x/4x scale, name, saved via plugin dialog). UI in
+Spanish and English, strings centralized in `src/i18n.ts` with the language
+persisted in the store.
 
 ### Export
 
-SVG generado en Rust (rects por fondo, texts por run, fuente embebida como
-`@font-face` base64 en `<defs>`), rasterizado con `resvg` a escala 2/3/4.
-Guardado con `tauri-plugin-dialog` + `std::fs`.
+SVG generated in Rust (rects for backgrounds, texts per run, font embedded as
+base64 `@font-face` in `<defs>`), rasterized with `resvg` at scale 2/3/4.
+Saved with `tauri-plugin-dialog` + `std::fs`.
 
-## Errores y límites
+## Errors and limits
 
-- Apps de pantalla completa (vim, htop): el estado final capturado puede no
-  representar la experiencia interactiva. Fuera de alcance v1.
-- Salida binaria: se degrada lossy (runs con bytes de control reemplazados).
-- Lookbehind/lookahead en regex de redacción: no soportado por `regex`.
-- Export falla con fuente no cargada → validación previa al rasterizado.
+- Fullscreen apps (vim, htop): the captured final state may not represent the
+  interactive experience. Out of scope for v1.
+- Binary output: degraded lossy (runs with control bytes replaced).
+- Lookbehind/lookahead in redaction regexes: not supported by `regex`.
+- Export fails with a font not loaded → validation before rasterizing.
 
-## Pruebas
+## Tests
 
-- Rust: fixtures ANSI → IR (colores, negrita, truecolor), reglas de redacción
-  (incluye comando), snapshot del SVG, dimensiones del PNG por escala.
-- TS: mapeo tema → CSS vars.
-- Smoke manual: flujo completo con `ls --color=auto`, `echo` con escape, `git status`.
+- Rust: ANSI fixtures → IR (colors, bold, truecolor), redaction rules
+  (command line included), SVG snapshot, PNG dimensions per scale.
+- TS: theme → CSS vars mapping.
+- Manual smoke: full flow with `ls --color=auto`, `echo` with escapes, `git status`.
 
-## Entrega
+## Delivery
 
-`cargo tauri build` → `.deb` + AppImage (bundler de Tauri).
+`cargo tauri build` → `.deb` + AppImage (Tauri bundler).

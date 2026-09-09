@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /**
- * Campo de color con canal alfa real. Un solo control, dos convenciones
- * universales: el tablero de ajedrez para "transparente" (como en Chrome
- * DevTools o Figma) y un deslizador de opacidad dentro del popover
- * (react-colorful). El valor es un string CSS: "transparent", "#rrggbb"
- * o "rgba(r,g,b,a)" con alfa intermedio.
+ * Color field with a real alpha channel. One control, two universal
+ * conventions: the checkerboard for "transparent" (as in Chrome DevTools
+ * or Figma) and an opacity slider inside the popover (react-colorful).
+ * The value is a CSS string: "transparent", "#rrggbb" or "rgba(r,g,b,a)"
+ * with intermediate alpha.
  */
 export function ColorField({
     value,
@@ -28,13 +28,13 @@ export function ColorField({
     hexAriaLabel: string;
     transparentLabel: string;
 }) {
-    // Estado del picker en hex8 (#rrggbbaa), el formato de HexAlphaColorPicker.
+    // Picker state in hex8 (#rrggbbaa), the HexAlphaColorPicker format.
     const [hex8, setHex8] = useState(() => toHex8(value));
     const [open, setOpen] = useState(false);
 
-    // Sincroniza si el valor cambia por fuera (presets, deshacer). Nunca mientras
-    // el popover está abierto: pisar el estado del picker a mitad de un arrastre
-    // hace que el selector "salte" a la posición anterior.
+    // Syncs if the value changes from outside (presets, undo). Never while
+    // the popover is open: clobbering the picker state mid-drag makes the
+    // handle "jump" back to the previous position.
     useEffect(() => {
         if (!open) setHex8(toHex8(value));
     }, [value, open]);
@@ -61,11 +61,9 @@ export function ColorField({
                     style={transparent ? CHECKERBOARD : { background: value }}
                 />
             </PopoverTrigger>
-            {/* p-5 (20px) > radio del thumb (~9px): las "bolas" no se salen del
-                contenedor al llevarlas a los extremos. */}
+            {/* Gap between the hue area, the hue slider and the alpha slider:
+                react-colorful stacks them without a margin of their own. */}
             <PopoverContent className="w-auto p-5" align="end">
-                {/* Separación entre área de matiz, slider de tono y slider de
-                    alfa: react-colorful los apila sin margen propio. */}
                 <HexAlphaColorPicker
                     color={hex8}
                     onChange={commit}
@@ -105,7 +103,7 @@ const CHECKERBOARD: CSSProperties = {
     backgroundColor: "#ffffff",
 };
 
-/** Alfa 0..255 de un valor de tema ("transparent" → 0). */
+/** Alpha 0..255 of a theme value ("transparent" → 0). */
 function alphaOf(v: string): number {
     const m = /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/.exec(v);
     if (m) return Math.round(Number(m[1]) * 255);
@@ -113,7 +111,7 @@ function alphaOf(v: string): number {
     return 255;
 }
 
-/** Valor de tema → #rrggbbaa para el picker. */
+/** Theme value → #rrggbbaa for the picker. */
 function toHex8(v: string): string {
     if (v === "transparent") return "#00000000";
     const m = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/.exec(v);
@@ -129,8 +127,8 @@ function toHex8(v: string): string {
     return "#000000ff";
 }
 
-/** #rrggbbaa → valor de tema. El alfa se conserva: rgba(r,g,b,0) mantiene el
- * matiz elegido; solo el botón «Transparente» produce el literal especial. */
+/** #rrggbbaa → theme value. Alpha is preserved: rgba(r,g,b,0) keeps the
+ * chosen hue; only the "Transparent" button produces the special literal. */
 function fromHex8(h8: string): string {
     const v = h8.toLowerCase();
     if (!/^#[0-9a-f]{8}$/.test(v)) return "#000000";

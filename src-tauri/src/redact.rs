@@ -3,15 +3,15 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
-/// Regla de redacción: regex → reemplazo. Se aplica al texto de cada run
-/// y a la línea de comando mostrada.
+/// Redaction rule: regex → replacement. Applied to the text of every run
+/// and to the displayed command line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RedactRule {
     pub pattern: String,
     pub replacement: String,
     pub enabled: bool,
-    /// Las reglas por defecto se pueden desactivar pero no borrar por la UI.
+    /// Default rules can be disabled but not deleted by the UI.
     pub is_default: bool,
 }
 
@@ -21,7 +21,7 @@ pub struct Redaction {
     pub rules: Vec<RedactRule>,
 }
 
-/// Genera las reglas por defecto a partir del entorno real del usuario.
+/// Generates the default rules from the user's real environment.
 pub fn default_rules() -> Vec<RedactRule> {
     let user = std::env::var("USER").unwrap_or_default();
     let home = std::env::var("HOME").unwrap_or_else(|_| format!("/home/{user}"));
@@ -35,7 +35,7 @@ pub fn default_rules() -> Vec<RedactRule> {
         },
         RedactRule {
             pattern: regex::escape(&user),
-            replacement: "usuario".into(),
+            replacement: "user".into(),
             enabled: true,
             is_default: true,
         },
@@ -55,15 +55,15 @@ fn hostname() -> String {
 }
 
 impl Redaction {
-    /// Aplica todas las reglas habilitadas, en orden, sobre un texto.
-    /// Un patrón inválido se ignora silenciosamente (la UI valida aparte).
+    /// Applies all enabled rules, in order, to a text.
+    /// An invalid pattern is silently ignored (the UI validates separately).
     pub fn apply(&self, text: &str) -> String {
         let mut out = text.to_string();
         for rule in &self.rules {
             if !rule.enabled || rule.pattern.is_empty() {
                 continue;
             }
-            // Compilación cacheada por patrón para no recompilar por run.
+            // Per-pattern cached compilation to avoid recompiling per run.
             if let Ok(re) = compile(&rule.pattern) {
                 if re.is_match(&out) {
                     out = re.replace_all(&out, rule.replacement.as_str()).into_owned();
@@ -73,7 +73,7 @@ impl Redaction {
         out
     }
 
-    /// Valida todos los patrones; devuelve los índices de los inválidos.
+    /// Validates all patterns; returns the indexes of the invalid ones.
     pub fn invalid_patterns(&self) -> Vec<usize> {
         self.rules
             .iter()
@@ -84,11 +84,11 @@ impl Redaction {
     }
 }
 
-/// Cache de regex compiladas por patrón; evita recompilar por run.
+/// Cache of compiled regexes per pattern; avoids recompiling per run.
 static RE_CACHE: LazyLock<Mutex<std::collections::HashMap<String, std::sync::Arc<Regex>>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
 
-/// Compila el patrón (cacheado). Devuelve Err si no compila.
+/// Compiles the pattern (cached). Returns Err if it doesn't compile.
 fn compile(pattern: &str) -> Result<std::sync::Arc<Regex>, regex::Error> {
     let mut map = RE_CACHE.lock();
     if let Some(re) = map.get(pattern) {
@@ -125,13 +125,10 @@ mod tests {
 
     #[test]
     fn user_and_hostname() {
-        let r = rules(&[
-            ("\\bmaria\\b", "usuario", true),
-            ("mi-pc", "localhost", true),
-        ]);
+        let r = rules(&[("\\bmaria\\b", "user", true), ("mi-pc", "localhost", true)]);
         assert_eq!(
             r.apply("maria@mi-pc:~/repo (maria)"),
-            "usuario@localhost:~/repo (usuario)"
+            "user@localhost:~/repo (user)"
         );
     }
 

@@ -14,7 +14,7 @@ use tauri_plugin_dialog::DialogExt;
 use theme::{Palette, Theme};
 use tokio::sync::Mutex;
 
-/// Estado global: bandera de stop para la captura en curso.
+/// Global state: stop flag for the capture in progress.
 pub struct AppState {
     pub stop: Arc<AtomicBool>,
     pub running: Mutex<bool>,
@@ -34,7 +34,7 @@ mod once_store {
         }
 
         fn path() -> PathBuf {
-            STORE_PATH.get().cloned().expect("store no inicializado")
+            STORE_PATH.get().cloned().expect("store not initialized")
         }
 
         pub fn load_json() -> serde_json::Value {
@@ -65,9 +65,9 @@ fn save_prefs(prefs: serde_json::Value) -> Result<(), String> {
     Store::save_json(&prefs)
 }
 
-/// Ejecuta el comando en una PTY y devuelve la captura como JSON SIN
-/// redactar: la redacción se aplica al renderizar (preview/export) para que
-/// editar reglas actualice el preview sin re-capturar.
+/// Runs the command in a PTY and returns the capture as UNREDACTED JSON:
+/// redaction is applied at render time (preview/export) so that editing
+/// rules updates the preview without re-capturing.
 #[tauri::command]
 async fn run_capture(
     state: State<'_, AppState>,
@@ -77,7 +77,7 @@ async fn run_capture(
     {
         let mut running = state.running.lock().await;
         if *running {
-            return Err("Ya hay una captura en curso".into());
+            return Err("A capture is already in progress".into());
         }
         *running = true;
     }
@@ -86,12 +86,12 @@ async fn run_capture(
         .stop
         .store(false, std::sync::atomic::Ordering::Relaxed);
 
-    // La PTY es bloqueante; correr en hilo aparte para no bloquear el runtime.
+    // The PTY is blocking; run it on a separate thread so the runtime isn't blocked.
     let result = tokio::task::spawn_blocking(move || {
         capture::run_command(&command, cwd.as_deref(), 240, 80, None)
             .map(|out: RunOutcome| {
                 serde_json::to_value(&out.capture)
-                    .map_err(|e| capture::CaptureError(format!("serialización IR: {e}")))
+                    .map_err(|e| capture::CaptureError(format!("IR serialization: {e}")))
             })
             .and_then(|v| v)
     })
@@ -106,7 +106,7 @@ fn stop_capture(state: State<'_, AppState>) {
     state.stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Aplica las reglas de redacción sobre commandLine y el texto de cada run.
+/// Applies the redaction rules to commandLine and the text of every run.
 fn redact_capture_value(v: &mut serde_json::Value, r: &Redaction) {
     if let Some(cl) = v.get_mut("commandLine").and_then(|c| c.as_str()) {
         let redacted = r.apply(cl);
@@ -126,12 +126,12 @@ fn redact_capture_value(v: &mut serde_json::Value, r: &Redaction) {
     }
 }
 
-/// Genera el PNG de la captura a la escala pedida y lo devuelve en base64.
-/// Siempre aplica las reglas guardadas: el export nunca muestra sin censura.
+/// Generates the PNG of the capture at the requested scale and returns it in base64.
+/// Always applies the saved rules: the export never shows uncensored.
 ///
-/// El render (fontdb + resvg + encode) es CPU-intensivo y bloqueante; corre en
-/// `spawn_blocking` para no congelar el hilo principal (la UI dejaría de
-/// responder y el spinner de exportación no llegaría a pintarse).
+/// The render (fontdb + resvg + encode) is CPU-intensive and blocking; it runs in
+/// `spawn_blocking` to avoid freezing the main thread (the UI would stop
+/// responding and the export spinner would never get painted).
 #[tauri::command]
 async fn export_png(
     capture: serde_json::Value,
@@ -140,7 +140,7 @@ async fn export_png(
     scale: u32,
 ) -> Result<String, String> {
     if !matches!(scale, 2..=4) {
-        return Err(format!("escala inválida: {scale}"));
+        return Err(format!("invalid scale: {scale}"));
     }
     tauri::async_runtime::spawn_blocking(move || {
         let mut cap = capture;
@@ -151,15 +151,15 @@ async fn export_png(
         Ok(base64::engine::general_purpose::STANDARD.encode(png))
     })
     .await
-    .map_err(|e| format!("export cancelado: {e}"))?
+    .map_err(|e| format!("export cancelled: {e}"))?
 }
 
-/// SVG exacto que el exportador rasteriza; el preview lo muestra tal cual,
-/// así preview y PNG no pueden divergir. `showRaw` solo lo pide el preview
-/// para el toggle temporal "mostrar sin censura".
+/// The exact SVG the exporter rasterizes; the preview displays it as-is,
+/// so preview and PNG can't diverge. Only the preview requests `showRaw`
+/// for the temporary "show uncensored" toggle.
 ///
-/// Igual que `export_png`: el render va a `spawn_blocking` para no bloquear el
-/// hilo principal mientras se escribe en el panel de tema/reglas.
+/// Same as `export_png`: the render goes to `spawn_blocking` so the main
+/// thread isn't blocked while typing in the theme/rules panel.
 #[tauri::command]
 async fn export_svg(
     capture: serde_json::Value,
@@ -176,19 +176,19 @@ async fn export_svg(
         Ok(export::render_svg(&cap, &theme, &Palette::default(), 1))
     })
     .await
-    .map_err(|e| format!("export cancelado: {e}"))?
+    .map_err(|e| format!("export cancelled: {e}"))?
 }
 
-/// Tema completo de un preset. El frontend reemplaza su tema entero al
-/// cambiar de preset: los overrides parciales dejaban restos del anterior.
+/// Full theme of a preset. The frontend replaces its whole theme when
+/// switching presets: partial overrides left leftovers of the previous one.
 #[tauri::command]
 fn preset_theme(preset: &str) -> Result<Theme, String> {
     theme::Preset::from_id(preset)
         .map(|p| p.theme())
-        .ok_or_else(|| format!("preset desconocido: {preset}"))
+        .ok_or_else(|| format!("unknown preset: {preset}"))
 }
 
-/// Reglas por defecto generadas del entorno real del usuario.
+/// Default rules generated from the user's real environment.
 #[tauri::command]
 fn default_rules() -> Vec<redact::RedactRule> {
     redact::default_rules()
@@ -199,7 +199,7 @@ fn get_home() -> String {
     std::env::var("HOME").unwrap_or_default()
 }
 
-/// Abre un diálogo de guardado y escribe el PNG (base64) en la ruta elegida.
+/// Opens a save dialog and writes the PNG (base64) to the chosen path.
 #[tauri::command]
 async fn save_png(
     app: AppHandle,
@@ -209,24 +209,24 @@ async fn save_png(
     use base64::Engine as _;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&base64_png)
-        .map_err(|e| format!("base64 inválido: {e}"))?;
+        .map_err(|e| format!("invalid base64: {e}"))?;
 
     let path = rfd_dialog(&app, &suggested_name).await?;
     if path.is_empty() {
-        return Ok(String::new()); // usuario canceló
+        return Ok(String::new()); // user cancelled
     }
-    std::fs::write(&path, bytes).map_err(|e| format!("no se pudo escribir {path}: {e}"))?;
+    std::fs::write(&path, bytes).map_err(|e| format!("could not write {path}: {e}"))?;
     Ok(path)
 }
 
 async fn rfd_dialog(app: &AppHandle, name: &str) -> Result<String, String> {
-    // Arranca en ~/Imágenes (o $HOME si XDG no la define) en vez del directorio
-    // desde el que se lanzó el proceso.
-    let inicio = app.path().picture_dir().map_err(|e| e.to_string())?;
+    // Starts at ~/Pictures (or $HOME if XDG doesn't define it) instead of the
+    // directory the process was launched from.
+    let start_dir = app.path().picture_dir().map_err(|e| e.to_string())?;
     let dialog = app
         .dialog()
         .file()
-        .set_directory(inicio)
+        .set_directory(start_dir)
         .set_file_name(name);
     match dialog.blocking_save_file() {
         Some(p) => Ok(p.to_string()),

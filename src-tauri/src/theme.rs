@@ -1,28 +1,28 @@
 use serde::{Deserialize, Serialize};
 
-/// Tema de la tarjeta: parámetros planos que interpretan tanto el preview
-/// web como el exportador SVG.
+/// Card theme: plain parameters interpreted by both the web preview
+/// and the SVG exporter.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Theme {
     pub preset: String,
-    /// Fondo exterior de la tarjeta (detrás de la ventana).
+    /// Outer backdrop of the card (behind the window).
     pub backdrop: String,
-    /// Fondo de la ventana del terminal.
+    /// Terminal window background.
     pub background: String,
-    /// Color de primer plano por defecto del texto.
+    /// Default foreground color of the text.
     pub foreground: String,
-    /// Color de acento (prompt, título activo).
+    /// Accent color (prompt, active title).
     pub accent: String,
     pub title: String,
     pub show_traffic_lights: bool,
     pub show_shadow: bool,
     pub corner_radius: u32,
-    /// Padding interior de la ventana (alrededor del texto).
+    /// Window inner padding (around the text).
     pub padding: u32,
-    /// Margen exterior transparente alrededor de la tarjeta.
+    /// Transparent outer margin around the card.
     pub outer_margin: u32,
-    /// Tamaño de fuente en px (unidad base del render; el export multiplica).
+    /// Font size in px (base render unit; the export multiplies it).
     pub font_size: u32,
     pub prompt_symbol: String,
 }
@@ -35,7 +35,7 @@ impl Default for Theme {
             background: "#1e1e2e".into(),
             foreground: "#cdd6f4".into(),
             accent: "#cba6f7".into(),
-            title: "usuario@localhost: ~".into(),
+            title: "user@localhost: ~".into(),
             show_traffic_lights: true,
             show_shadow: true,
             corner_radius: 12,
@@ -57,7 +57,7 @@ pub enum Preset {
 }
 
 impl Preset {
-    /// Todos los presets, en orden de la UI.
+    /// All presets, in UI order.
     pub const ALL: [Preset; 4] = [
         Preset::MacDark,
         Preset::MacLight,
@@ -65,12 +65,12 @@ impl Preset {
         Preset::Solarized,
     ];
 
-    /// Preset a partir de su identificador de tema (`preset` en el JSON).
+    /// Preset from its theme identifier (`preset` in the JSON).
     pub fn from_id(id: &str) -> Option<Preset> {
         Preset::ALL.iter().copied().find(|p| p.id() == id)
     }
 
-    /// Identificador estable del preset (coincide con `theme.preset`).
+    /// Stable identifier of the preset (matches `theme.preset`).
     pub fn id(self) -> &'static str {
         match self {
             Preset::MacDark => "mac-dark",
@@ -80,8 +80,8 @@ impl Preset {
         }
     }
 
-    /// Tema completo de cada preset. ÚNICA fuente de verdad: la UI lo pide
-    /// por IPC (`preset_theme`) y reemplaza su tema entero con la respuesta.
+    /// Full theme of each preset. SINGLE source of truth: the UI requests it
+    /// over IPC (`preset_theme`) and replaces its entire theme with the response.
     pub fn theme(self) -> Theme {
         let base = Theme::default();
         match self {
@@ -115,7 +115,7 @@ impl Preset {
     }
 }
 
-/// Paleta de 16 colores ANSI (0-15) para resolver `Color::Indexed` > 15.
+/// Palette of 16 ANSI colors (0-15) to resolve `Color::Indexed` > 15.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Palette {
@@ -125,7 +125,7 @@ pub struct Palette {
 
 impl Default for Palette {
     fn default() -> Self {
-        // Catppuccin Mocha por defecto; cada preset trae el suyo.
+        // Catppuccin Mocha by default; each preset brings its own.
         Palette {
             normal: [
                 "#45475a".into(), // black
@@ -152,7 +152,7 @@ impl Default for Palette {
 }
 
 impl Palette {
-    /// Resuelve un índice ANSI 0-255 a color CSS.
+    /// Resolves an ANSI index 0-255 to a CSS color.
     pub fn resolve(&self, index: u8) -> String {
         match index {
             0..=7 => self.normal[usize::from(index)].clone(),

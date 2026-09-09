@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Termcard is a Tauri 2 desktop tool (termshot-style): type a shell command, run it in a PTY inside the app, capture the final terminal screen, redact sensitive strings (home path, username, hostname by default), and export a macOS-style terminal card as PNG (2x/3x/4x) or SVG. UI text is bilingual Spanish/English via hand-rolled i18n (`src/i18n.ts`; no i18n library), language detected from the system on first run and persisted in `Prefs.lang`. Rust doc comments and assert messages stay Spanish. The authoritative doc is the approved design spec at `docs/superpowers/specs/2026-09-09-termcard-design.md` (Spanish); `README.md` is untouched Tauri template boilerplate.
+Termcard is a Tauri 2 desktop tool (termshot-style): type a shell command, run it in a PTY inside the app, capture the final terminal screen, redact sensitive strings (home path, username, hostname by default), and export a macOS-style terminal card as PNG (2x/3x/4x) or SVG. UI text is bilingual Spanish/English via hand-rolled i18n (`src/i18n.ts`; no i18n library), language detected from the system on first run and persisted in `Prefs.lang`. Source prose (comments, doc comments, assert messages, backend error strings) is English. The authoritative doc is the approved design spec at `docs/superpowers/specs/2026-09-09-termcard-design.md` (translated to English); `README.md` describes the project in English.
 
 ## Architecture & Data Flow
 
@@ -26,7 +26,7 @@ Prefs: hand-rolled once_store JSON blob at app_config_dir/termcard-store.json (o
 
 Rust backend (`termcard_lib`, flat modules): `lib.rs` (10 `#[tauri::command]`s + `AppState` + `once_store`), `capture.rs` (PTY), `ir.rs` (Capture/Line/Run/Color, `from_vt100` with run merging, `Capture::trimmed`), `redact.rs` (regex rules + LazyLock cache), `theme.rs` (Theme + `Preset::theme()` as single source of truth, ANSI-256 `Palette`), `export.rs` (hand-built SVG with base64-embedded JetBrains Mono, `CH_WIDTH 0.6` / `LINE_HEIGHT 1.2`, + resvg PNG).
 
-Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (10 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings stay Spanish; the frontend wraps them (`Error: {detail}`).
+Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (10 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings are English; the frontend wraps them (`Error: {detail}`).
 
 ## Key Directories
 
@@ -61,7 +61,7 @@ cd src-tauri && cargo test   # 33 tests (31 inline + 2 in export_probe.rs)
 - Errors: `Result<_, String>` at the command boundary (`.map_err(|e| e.to_string())`). The one real error type is `CaptureError(pub String)` in `capture.rs`.
 - State: `.manage(AppState { stop, running })`; `LazyLock` statics for fonts and regex cache; blocking work under `spawn_blocking`.
 - Redaction mutates the serialized `serde_json::Value` directly (`redact_capture_value` in `lib.rs`) rather than round-tripping through structs.
-- Comments, doc comments, UI strings, and assert messages: Spanish. Keep it consistent.
+- Comments, doc comments, assert messages, and backend error strings: English. Keep it consistent. User-facing UI strings go through `src/i18n.ts` in both languages.
 - Persistence is the hand-rolled `once_store` module (`OnceLock<PathBuf>`, whole-JSON `get_prefs`/`save_prefs`). `tauri-plugin-store` is still in `Cargo.toml` but unused — don't add plugin-store calls. Same for `@tauri-apps/plugin-dialog`: Rust opens the save dialog itself via `AppHandle`.
 - `[lib] name = "termcard_lib"`: the `_lib` suffix avoids a lib/bin name collision (Windows cargo issue); don't rename.
 
@@ -103,4 +103,3 @@ cd src-tauri && cargo test   # 33 tests (31 inline + 2 in export_probe.rs)
     - Preset definitions live in `theme.rs::Preset::theme` only; `App.tsx::PRESET_LABELS` holds display labels.
     - The synthetic `❯ <command>` prompt line is rendered by both SVG and PNG renderers; the displayed command goes through redaction like captured text.
     - UI strings live only in `src/i18n.ts`: `es` is the key source, `en` typed `typeof es` (key parity is a tsc failure). Identical-in-both-languages literals ("Preset", "Padding", "regex", "Traffic lights", "termcard", "v0.1", "2×/3×/4×") stay inline.
-- Design spec gotcha: the spec says "vanilla TS, no framework" but the code is React 19 + shadcn. Code is current; the spec is stale on this point.

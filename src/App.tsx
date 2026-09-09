@@ -14,9 +14,9 @@ import {
 } from "lucide-react";
 import githubMark from "@/assets/github-mark.svg?raw";
 
-// Octicon `mark-github-16` oficial de Primer: lucide-react ya no trae iconos de
-// marca. Va inline (?raw) para que `fill="currentColor"` herede el color del
-// enlace; como <img> el SVG no ve el color del padre y se pinta negro.
+// Primer's official Octicon `mark-github-16`: lucide-react no longer ships
+// brand icons. Inlined (?raw) so `fill="currentColor"` inherits the link's
+// color; as <img> the SVG can't see the parent color and renders black.
 function GithubIcon() {
     return (
         <span
@@ -54,7 +54,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PREFS, api, type Capture, type Prefs, type RedactRule, type Theme } from "@/api";
 import { LANGS, translate, type Lang, type MessageKey } from "@/i18n";
 
-/** Prefs iniciales para un primer arranque sin store previo. */
+/** Initial prefs for a first run with no store yet. */
 function defaultPrefs(cwd: string, rules: Prefs["rules"]): Prefs {
     return { ...DEFAULT_PREFS, cwd, rules };
 }
@@ -78,7 +78,7 @@ export default function App() {
     });
     const setStatus = (msg: string, err = false) => setStatusState({ msg, err });
     const [ready, setReady] = useState(false);
-    // Traductor de UI: el idioma vive en prefs.lang (única fuente, sin estado duplicado).
+    // UI translator: the language lives in prefs.lang (single source, no duplicated state).
     const msg = useCallback(
         (key: MessageKey, params?: Record<string, string | number>) =>
             translate(prefs.lang, key, params),
@@ -97,7 +97,7 @@ export default function App() {
                         ...saved,
                         theme: { ...DEFAULT_PREFS.theme, ...saved.theme },
                     };
-                    // El store no es de confianza: un lang corrupto rompería el Select.
+                    // The store isn't trusted: a corrupt lang would break the Select.
                     const storedLang = next.lang as string;
                     if (storedLang !== "es" && storedLang !== "en") {
                         next.lang = DEFAULT_PREFS.lang;
@@ -116,14 +116,14 @@ export default function App() {
         })();
     }, []);
 
-    // index.html trae lang="es" fijo: se corrige al montar y al cambiar de idioma.
+    // index.html ships lang="es" hardcoded: fixed on mount and on language change.
     useEffect(() => {
         document.documentElement.lang = prefs.lang;
     }, [prefs.lang]);
 
-    // El preview ES el SVG que se exporta: cero divergencia posible.
-    // Se regenera al cambiar la captura, el tema, las reglas de redacción o
-    // el toggle "mostrar sin censura" (solo preview; el export nunca).
+    // The preview IS the SVG that gets exported: zero possible divergence.
+    // Regenerated whenever the capture, theme, redaction rules or the
+    // "show uncensored" toggle change (preview only; never on export).
     useEffect(() => {
         if (!capture) {
             setSvg(null);
@@ -155,7 +155,7 @@ export default function App() {
         });
     }, []);
 
-    // ---- captura ----
+    // ---- capture ----
     const run = useCallback(async () => {
         if (running) return;
         if (!prefs.command.trim()) {
@@ -188,8 +188,8 @@ export default function App() {
     }, [run]);
 
     // ---- export ----
-    // El render corre en spawn_blocking en Rust: la UI sigue viva y este
-    // feedback sí llega a pintarse mientras se genera el PNG.
+    // The render runs in spawn_blocking in Rust: the UI stays alive and this
+    // feedback does get painted while the PNG is being generated.
     const exportPng = useCallback(async () => {
         if (!capture) {
             setStatus(msg("statusNoCapture"), true);
@@ -208,7 +208,7 @@ export default function App() {
         }
     }, [capture, prefs]);
 
-    // ---- reglas ----
+    // ---- rules ----
     const setRule = (i: number, patch: Partial<RedactRule>) => {
         patchPrefs({
             rules: prefs.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)),
@@ -234,12 +234,12 @@ export default function App() {
 
     return (
         <div className="flex h-screen overflow-hidden">
-            {/* Panel izquierdo */}
+            {/* Left panel */}
             <aside className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-r bg-sidebar p-4">
                 <div className="mb-4 flex items-center gap-2">
                     <Terminal className="size-5 text-primary" />
                     <h1 className="text-base font-semibold tracking-tight">termcard</h1>
-                    {/* Selector de idiomas: persiste en prefs.lang. */}
+                    {/* Language selector: persisted in prefs.lang. */}
                     <Select
                         value={prefs.lang}
                         onValueChange={(v) => v && patchPrefs({ lang: v as Lang })}
@@ -261,7 +261,7 @@ export default function App() {
                     </Select>
                 </div>
 
-                {/* Captura */}
+                {/* Capture */}
                 <section>
                     <FieldGroup>
                         <Field>
@@ -314,7 +314,7 @@ export default function App() {
 
                 <Separator className="my-4" />
 
-                {/* Redacción */}
+                {/* Redaction */}
                 <section>
                     <div className="flex items-center justify-between">
                         <Label className="text-xs uppercase text-muted-foreground tracking-wide">
@@ -395,7 +395,7 @@ export default function App() {
 
                 <Separator className="my-4" />
 
-                {/* Tema */}
+                {/* Theme */}
                 <section>
                     <div className="flex items-center gap-1.5">
                         <Palette className="size-3.5 text-muted-foreground" />
@@ -410,8 +410,8 @@ export default function App() {
                                 value={t.preset}
                                 onValueChange={(v) => {
                                     if (!v) return;
-                                    // El preset trae el tema COMPLETO desde Rust:
-                                    // nunca quedan restos del preset anterior.
+                                    // The preset brings the COMPLETE theme from Rust:
+                                    // no leftovers from the previous preset ever remain.
                                     void api.presetTheme(v).then((full) => {
                                         patchTheme(full);
                                     });

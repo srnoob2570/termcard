@@ -57,9 +57,9 @@ export interface Prefs {
     lang: Lang;
 }
 
-// Espejo TS de `Theme::default` + `Prefs` en src-tauri/src/theme.rs y lib.rs.
-// El preset "mac-dark" ES Theme::default(): una sola definición en Rust,
-// esta copia solo cubre el primer render antes del primer IPC.
+// TS mirror of `Theme::default` + `Prefs` in src-tauri/src/theme.rs and lib.rs.
+// The "mac-dark" preset IS Theme::default(): a single definition in Rust;
+// this copy only covers the first render before the first IPC.
 export const DEFAULT_PREFS: Prefs = {
     command: "",
     cwd: "",
@@ -70,7 +70,7 @@ export const DEFAULT_PREFS: Prefs = {
         background: "#1e1e2e",
         foreground: "#cdd6f4",
         accent: "#cba6f7",
-        title: "usuario@localhost: ~",
+        title: "user@localhost: ~",
         showTrafficLights: true,
         showShadow: true,
         cornerRadius: 12,
