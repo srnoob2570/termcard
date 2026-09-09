@@ -92,16 +92,6 @@ impl Redaction {
         }
         out
     }
-
-    /// Validates all patterns; returns the indexes of the invalid ones.
-    pub fn invalid_patterns(&self) -> Vec<usize> {
-        self.rules
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| !r.pattern.is_empty() && Regex::new(&r.pattern).is_err())
-            .map(|(i, _)| i)
-            .collect()
-    }
 }
 
 /// Cache of compiled regexes per pattern; avoids recompiling per run.
@@ -170,7 +160,6 @@ mod tests {
     fn invalid_pattern_ignored() {
         let r = rules(&[("(unclosed", "X", true)]);
         assert_eq!(r.apply("(unclosed text"), "(unclosed text");
-        assert_eq!(r.invalid_patterns().len(), 1);
     }
 
     #[test]

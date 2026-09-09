@@ -55,11 +55,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_PREFS, api, type Capture, type Prefs, type RedactRule, type Theme } from "@/api";
 import { LANGS, translate, type Lang, type MessageKey } from "@/i18n";
 
-/** Initial prefs for a first run with no store yet. */
-function defaultPrefs(cwd: string, rules: Prefs["rules"]): Prefs {
-    return { ...DEFAULT_PREFS, cwd, rules };
-}
-
 const PRESET_LABELS: Record<string, MessageKey> = {
     "mac-dark": "presetMacDark",
     "mac-light": "presetMacLight",
@@ -108,7 +103,11 @@ export default function App() {
                     }
                     if (!next.rules.length) next.rules = await api.defaultRules();
                 } else {
-                    next = defaultPrefs(await api.getHome(), await api.defaultRules());
+                    next = {
+                        ...DEFAULT_PREFS,
+                        cwd: await api.getHome(),
+                        rules: await api.defaultRules(),
+                    };
                 }
                 lang = next.lang;
                 setPrefs(next);
