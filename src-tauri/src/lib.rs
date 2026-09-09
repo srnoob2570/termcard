@@ -91,7 +91,11 @@ async fn run_capture(
     // La PTY es bloqueante; correr en hilo aparte para no bloquear el runtime.
     let result = tokio::task::spawn_blocking(move || {
         capture::run_command(&command, cwd.as_deref(), cols, rows, None)
-            .map(|out: RunOutcome| serde_json::to_value(&out.capture).unwrap())
+            .map(|out: RunOutcome| {
+            serde_json::to_value(&out.capture)
+                .map_err(|e| capture::CaptureError(format!("serialización IR: {e}")))
+        })
+        .and_then(|v| v)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -137,7 +141,7 @@ fn apply_redaction_to_json(v: &mut serde_json::Value, r: &Redaction) {
 /// Genera el PNG de la captura a la escala pedida y lo devuelve en base64.
 #[tauri::command]
 fn export_png(capture: serde_json::Value, theme: Theme, scale: u32) -> Result<String, String> {
-    if !matches!(scale, 2 | 3 | 4) {
+    if !matches!(scale, 2..=4) {
         return Err(format!("escala inválida: {scale}"));
     }
     let cap: ir::Capture = serde_json::from_value(capture).map_err(|e| e.to_string())?;
