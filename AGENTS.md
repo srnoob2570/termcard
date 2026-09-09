@@ -33,7 +33,6 @@ Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/co
 - `src/` — React 19 frontend: `App.tsx`, `api.ts`, `i18n.ts` (es/en UI dictionaries, `detectLang`), `components/color-field.tsx` (custom react-colorful alpha picker in a Popover, handles "transparent"/#rrggbb/rgba() ↔ #rrggbbaa; takes translated `ariaLabel`/`hexAriaLabel`/`transparentLabel` props), `components/ui/` (shadcn `base-nova` on `@base-ui/react`), `styles.css` (Tailwind v4)
 - `src-tauri/src/` — Rust backend modules above; `main.rs` is a thin shim calling `termcard_lib::run()`
 - `src-tauri/fonts/` — JetBrains Mono TTFs, embedded via `include_bytes!` + `LazyLock`
-- `src-tauri/tests/export_probe.rs` — self-declared diagnostic harness (renders a fixture to `/tmp/termcard-debug`, pixel-measures geometry); explicitly not a regression test, slated for deletion
 - `docs/superpowers/specs/` — design spec (read before architectural changes)
 
 ## Development Commands
@@ -47,7 +46,7 @@ bun run dev        # web-only Vite dev server (no Tauri shell), port 1420 strict
 bun run build      # tsc && vite build — tsc IS the typecheck gate
 bun run preview    # serve production build
 bun run tauri build # release bundle (.deb/AppImage)
-cd src-tauri && cargo test   # 37 tests (35 inline + 2 in export_probe.rs)
+cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
 ```
 
 - Plain `bun run tauri dev` fails: `bun run app` exists precisely to prepend `~/.cargo/bin`.
@@ -94,7 +93,7 @@ cd src-tauri && cargo test   # 37 tests (35 inline + 2 in export_probe.rs)
 
 ## Testing & QA
 
-- Rust-only suite, 37 tests: 35 inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 3) + 2 in `tests/export_probe.rs`. No frontend tests, no coverage tooling.
+- Rust-only suite, 35 tests, all inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 3). No frontend tests, no coverage tooling.
 - Naming: snake_case behavioral names (`svg_escapes_xml`, `disabled_rules_skipped`). Fixtures are in-module helper functions, not files.
 - `capture.rs` tests are **not hermetic**: they spawn real shell commands and depend on PATH, GNU `ls --color=always`, and `/tmp`. `stop_flag_kills_hanging_command` is the slowest/flakiest (150ms timing race, spawns `sleep 60`).
 - Husky pre-commit (`.husky/pre-commit`): `bunx lint-staged` (prettier on web files, rustfmt on `src-tauri/**/*.rs`) **and** `cd src-tauri && cargo fmt --check && cargo test` — every commit runs the full Rust suite and needs cargo on PATH.
