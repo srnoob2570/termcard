@@ -57,9 +57,14 @@ export interface Theme {
     cardWidth: number | null;
 }
 
+/** Which capture tab is active. Only the frontend reads it. */
+export type CaptureMode = "interactive" | "manual";
+
 export interface Prefs {
     command: string;
     cwd: string;
+    mode: CaptureMode;
+    manualOutput: string;
     rules: RedactRule[];
     theme: Theme;
     scale: number;
@@ -73,6 +78,8 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = {
     command: "",
     cwd: "",
+    mode: "interactive",
+    manualOutput: "",
     rules: [],
     theme: {
         preset: "mac-dark",

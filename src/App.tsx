@@ -27,6 +27,12 @@ function GithubIcon() {
     );
 }
 
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { ColorField } from "@/components/color-field";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,7 +57,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_PREFS, api, type Capture, type Prefs, type RedactRule, type Theme } from "@/api";
+import { buildManualCapture } from "@/manual";
 import { LANGS, translate, type Lang, type MessageKey } from "@/i18n";
 
 const PRESET_LABELS: Record<string, MessageKey> = {
@@ -117,6 +125,12 @@ export default function App() {
                     if (storedLang !== "es" && storedLang !== "en") {
                         next.lang = DEFAULT_PREFS.lang;
                     }
+                    // Same distrust for the enum/string fields added later:
+                    // stores saved by older versions lack them entirely.
+                    if (next.mode !== "interactive" && next.mode !== "manual") {
+                        next.mode = "interactive";
+                    }
+                    if (typeof next.manualOutput !== "string") next.manualOutput = "";
                     if (!next.rules.length) next.rules = await api.defaultRules();
                 } else {
                     next = {
@@ -215,16 +229,33 @@ export default function App() {
         }
     }, [prefs, running]);
 
+    // ---- manual capture ----
+    const generate = useCallback(() => {
+        if (!prefs.command.trim()) {
+            setStatus(msg("statusEmptyCommand"), true);
+            return;
+        }
+        if (!prefs.manualOutput.trim()) {
+            setStatus(msg("statusEmptyOutput"), true);
+            return;
+        }
+        const cap = buildManualCapture(prefs.command, prefs.manualOutput);
+        setCapture(cap);
+        const n = cap.lines.filter((l) => l.runs.length > 0).length;
+        setStatus(msg("statusCaptureDone", { n }));
+    }, [prefs, msg]);
+
     useEffect(() => {
         const h = (e: KeyboardEvent) => {
             if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                 e.preventDefault();
-                void run();
+                if (prefs.mode === "manual") generate();
+                else void run();
             }
         };
         document.addEventListener("keydown", h);
         return () => document.removeEventListener("keydown", h);
-    }, [run]);
+    }, [run, generate, prefs.mode]);
 
     // ---- export ----
     // The render runs in spawn_blocking in Rust: the UI stays alive and this
@@ -282,6 +313,57 @@ export default function App() {
 
     const t = prefs.theme;
 
+    // The command textarea is shared by both capture modes; only one tab
+    // panel is mounted at a time, so the ids stay unique.
+    const commandField = (
+        <>
+            <Field>
+                <FieldLabel htmlFor="command" className="text-xs">
+                    {msg("labelCommand")}
+                </FieldLabel>
+                <Textarea
+                    id="command"
+                    rows={3}
+                    className="font-mono text-[13px]"
+                    placeholder="ls --color=auto -la"
+                    value={prefs.command}
+                    onChange={(e) => patchPrefs({ command: e.target.value })}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
+                    spellCheck={false}
+                    data-gramm="false"
+                    data-enable-grammar="false"
+                />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+                <Field>
+                    <FieldLabel htmlFor="promptSymbol" className="text-xs">
+                        {msg("labelPromptSymbol")}
+                    </FieldLabel>
+                    <Input
+                        id="promptSymbol"
+                        className="h-8 text-center font-mono text-xs"
+                        maxLength={3}
+                        value={t.promptSymbol}
+                        onChange={(e) => patchTheme({ promptSymbol: e.target.value })}
+                    />
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="cardTitle" className="text-xs">
+                        {msg("labelTitle")}
+                    </FieldLabel>
+                    <Input
+                        id="cardTitle"
+                        className="h-8 text-xs"
+                        value={t.title}
+                        onChange={(e) => patchTheme({ title: e.target.value })}
+                    />
+                </Field>
+            </div>
+        </>
+    );
+
     return (
         <div className="flex h-screen overflow-hidden">
             {/* Left panel */}
@@ -310,146 +392,101 @@ export default function App() {
                     </Select>
                 </div>
 
-                {/* Capture */}
+                {/* Capture: the tabs replace the section header. */}
                 <section>
-                    <FieldGroup>
-                        <Field>
-                            <FieldLabel className="text-xs uppercase text-muted-foreground tracking-wide">
-                                {msg("sectionCapture")}
-                            </FieldLabel>
-                            <Textarea
-                                id="command"
-                                rows={3}
-                                className="font-mono text-[13px]"
-                                placeholder="ls --color=auto -la"
-                                value={prefs.command}
-                                onChange={(e) => patchPrefs({ command: e.target.value })}
-                                autoCapitalize="off"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                spellCheck={false}
-                                data-gramm="false"
-                                data-enable-grammar="false"
-                            />
-                        </Field>
-                        <Field>
-                            <FieldLabel htmlFor="cwd" className="text-xs">
-                                {msg("labelDirectory")}
-                            </FieldLabel>
-                            <Input
-                                id="cwd"
-                                className="h-8 font-mono text-xs"
-                                placeholder="~/"
-                                value={prefs.cwd}
-                                onChange={(e) => patchPrefs({ cwd: e.target.value })}
-                                autoCapitalize="off"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                spellCheck={false}
-                            />
-                        </Field>
-                    </FieldGroup>
-                    <div className="mt-3 flex gap-2">
-                        <Button
-                            onClick={() => void run()}
-                            disabled={running || exporting}
-                            className="flex-1"
-                        >
-                            {running ? (
-                                <Spinner data-icon="inline-start" />
-                            ) : (
-                                <Camera data-icon="inline-start" />
-                            )}
-                            {running ? msg("statusRunning") : msg("actionRun")}
-                        </Button>
-                        {running && (
-                            <Button variant="outline" onClick={() => void api.stopCapture()}>
-                                <OctagonX data-icon="inline-start" />
-                                {msg("actionStop")}
-                            </Button>
-                        )}
-                    </div>
-                </section>
-
-                <Separator className="my-4" />
-
-                {/* Redaction */}
-                <section>
-                    <div className="flex items-center justify-between">
-                        <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-                            {msg("sectionRedaction")}
-                        </Label>
-                        <div className="flex gap-1">
-                            <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                onClick={addRule}
-                                title={msg("titleAddRule")}
-                            >
-                                <Plus />
-                            </Button>
-                            <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                onClick={() => void restoreRules()}
-                                title={msg("titleRestoreRules")}
-                            >
-                                <RotateCcw />
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="mt-2 space-y-2">
-                        {prefs.rules.map((rule, i) => (
-                            <div key={i} className="flex items-center gap-1.5">
-                                <Checkbox
-                                    checked={rule.enabled}
-                                    onCheckedChange={(v) => setRule(i, { enabled: v === true })}
-                                    className="size-4 shrink-0"
-                                />
-                                <Input
-                                    className="h-7 flex-[1.4] px-2 font-mono text-[11px]"
-                                    placeholder="regex"
-                                    value={rule.pattern}
-                                    onChange={(e) => setRule(i, { pattern: e.target.value })}
-                                />
-                                <span className="text-xs text-muted-foreground">→</span>
-                                <Input
-                                    className="h-7 flex-1 px-2 text-[11px]"
-                                    placeholder={msg("placeholderReplacement")}
-                                    value={rule.replacement}
-                                    onChange={(e) => setRule(i, { replacement: e.target.value })}
-                                />
+                    <Tabs
+                        value={prefs.mode}
+                        onValueChange={(v) => {
+                            if (v === "interactive" || v === "manual") {
+                                patchPrefs({ mode: v });
+                            }
+                        }}
+                    >
+                        <TabsList className="w-full">
+                            <TabsTrigger value="interactive">{msg("modeInteractive")}</TabsTrigger>
+                            <TabsTrigger value="manual">{msg("modeManual")}</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="interactive">
+                            <FieldGroup>
+                                {commandField}
+                                <Field>
+                                    <FieldLabel htmlFor="cwd" className="text-xs">
+                                        {msg("labelDirectory")}
+                                    </FieldLabel>
+                                    <Input
+                                        id="cwd"
+                                        className="h-8 font-mono text-xs"
+                                        placeholder="~/"
+                                        value={prefs.cwd}
+                                        onChange={(e) => patchPrefs({ cwd: e.target.value })}
+                                        autoCapitalize="off"
+                                        autoCorrect="off"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                    />
+                                </Field>
+                            </FieldGroup>
+                            <div className="mt-3 flex gap-2">
                                 <Button
-                                    size="icon-xs"
-                                    variant="ghost"
-                                    disabled={rule.isDefault}
-                                    onClick={() => removeRule(i)}
-                                    title={
-                                        rule.isDefault
-                                            ? msg("titleDefaultRuleNoDelete")
-                                            : msg("titleDeleteRule")
-                                    }
+                                    onClick={() => void run()}
+                                    disabled={running || exporting}
+                                    className="flex-1"
                                 >
-                                    <Trash2 />
+                                    {running ? (
+                                        <Spinner data-icon="inline-start" />
+                                    ) : (
+                                        <Camera data-icon="inline-start" />
+                                    )}
+                                    {running ? msg("statusRunning") : msg("actionRun")}
+                                </Button>
+                                {running && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => void api.stopCapture()}
+                                    >
+                                        <OctagonX data-icon="inline-start" />
+                                        {msg("actionStop")}
+                                    </Button>
+                                )}
+                            </div>
+                        </TabsContent>
+                        <TabsContent value="manual">
+                            <FieldGroup>
+                                {commandField}
+                                <Field>
+                                    <FieldLabel htmlFor="manualOutput" className="text-xs">
+                                        {msg("labelOutput")}
+                                    </FieldLabel>
+                                    <Textarea
+                                        id="manualOutput"
+                                        rows={6}
+                                        className="font-mono text-[13px]"
+                                        placeholder={msg("placeholderOutput")}
+                                        value={prefs.manualOutput}
+                                        onChange={(e) =>
+                                            patchPrefs({ manualOutput: e.target.value })
+                                        }
+                                        autoCapitalize="off"
+                                        autoCorrect="off"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        data-gramm="false"
+                                        data-enable-grammar="false"
+                                    />
+                                </Field>
+                            </FieldGroup>
+                            <div className="mt-3 flex gap-2">
+                                <Button
+                                    onClick={() => generate()}
+                                    disabled={exporting}
+                                    className="flex-1"
+                                >
+                                    <Camera data-icon="inline-start" />
+                                    {msg("actionGenerate")}
                                 </Button>
                             </div>
-                        ))}
-                    </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-2 w-full text-muted-foreground"
-                        onClick={() => patchPrefs({ uncensored: !prefs.uncensored })}
-                    >
-                        {prefs.uncensored ? (
-                            <EyeOff data-icon="inline-start" />
-                        ) : (
-                            <Eye data-icon="inline-start" />
-                        )}
-                        {prefs.uncensored
-                            ? msg("actionUncensoredHide")
-                            : msg("actionUncensoredShow")}
-                    </Button>
+                        </TabsContent>
+                    </Tabs>
                 </section>
 
                 <Separator className="my-4" />
@@ -462,41 +499,30 @@ export default function App() {
                             {msg("sectionTheme")}
                         </Label>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div>
-                            <Label className="text-xs">Preset</Label>
-                            <Select
-                                value={t.preset}
-                                onValueChange={(v) => {
-                                    if (!v) return;
-                                    // The preset brings the COMPLETE theme from Rust:
-                                    // no leftovers from the previous preset ever remain.
-                                    void api.presetTheme(v).then((full) => {
-                                        patchTheme(full);
-                                    });
-                                }}
-                            >
-                                <SelectTrigger className="mt-1 h-8 w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(PRESET_LABELS).map(([v, k]) => (
-                                        <SelectItem key={v} value={v}>
-                                            {msg(k)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label className="text-xs">{msg("labelPromptSymbol")}</Label>
-                            <Input
-                                className="mt-1 h-8 text-center font-mono"
-                                maxLength={3}
-                                value={t.promptSymbol}
-                                onChange={(e) => patchTheme({ promptSymbol: e.target.value })}
-                            />
-                        </div>
+                    <div className="mt-2">
+                        <Label className="text-xs">Preset</Label>
+                        <Select
+                            value={t.preset}
+                            onValueChange={(v) => {
+                                if (!v) return;
+                                // The preset brings the COMPLETE theme from Rust:
+                                // no leftovers from the previous preset ever remain.
+                                void api.presetTheme(v).then((full) => {
+                                    patchTheme(full);
+                                });
+                            }}
+                        >
+                            <SelectTrigger className="mt-1 h-8 w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(PRESET_LABELS).map(([v, k]) => (
+                                    <SelectItem key={v} value={v}>
+                                        {msg(k)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                         <div>
@@ -531,14 +557,6 @@ export default function App() {
                                 </span>
                             </div>
                         </div>
-                    </div>
-                    <div className="mt-2">
-                        <Label className="text-xs">{msg("labelTitle")}</Label>
-                        <Input
-                            className="mt-1 h-8"
-                            value={t.title}
-                            onChange={(e) => patchTheme({ title: e.target.value })}
-                        />
                     </div>
                     <div className="mt-2 grid grid-cols-4 gap-2">
                         <div>
@@ -644,6 +662,97 @@ export default function App() {
                         </label>
                     </div>
                 </section>
+                <Separator className="my-4" />
+
+                {/* Redaction: secondary, collapsed by default, at the bottom. */}
+                <section>
+                    <Accordion>
+                        <AccordionItem value="rules">
+                            <AccordionTrigger className="text-xs uppercase text-muted-foreground tracking-wide no-underline">
+                                {msg("sectionRedaction")}
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="flex justify-end gap-1">
+                                    <Button
+                                        size="icon-xs"
+                                        variant="ghost"
+                                        onClick={addRule}
+                                        title={msg("titleAddRule")}
+                                    >
+                                        <Plus />
+                                    </Button>
+                                    <Button
+                                        size="icon-xs"
+                                        variant="ghost"
+                                        onClick={() => void restoreRules()}
+                                        title={msg("titleRestoreRules")}
+                                    >
+                                        <RotateCcw />
+                                    </Button>
+                                </div>
+                                <div className="mt-2 space-y-2">
+                                    {prefs.rules.map((rule, i) => (
+                                        <div key={i} className="flex items-center gap-1.5">
+                                            <Checkbox
+                                                checked={rule.enabled}
+                                                onCheckedChange={(v) =>
+                                                    setRule(i, { enabled: v === true })
+                                                }
+                                                className="size-4 shrink-0"
+                                            />
+                                            <Input
+                                                className="h-7 flex-[1.4] px-2 font-mono text-[11px]"
+                                                placeholder="regex"
+                                                value={rule.pattern}
+                                                onChange={(e) =>
+                                                    setRule(i, { pattern: e.target.value })
+                                                }
+                                            />
+                                            <span className="text-xs text-muted-foreground">→</span>
+                                            <Input
+                                                className="h-7 flex-1 px-2 text-[11px]"
+                                                placeholder={msg("placeholderReplacement")}
+                                                value={rule.replacement}
+                                                onChange={(e) =>
+                                                    setRule(i, { replacement: e.target.value })
+                                                }
+                                            />
+                                            <Button
+                                                size="icon-xs"
+                                                variant="ghost"
+                                                disabled={rule.isDefault}
+                                                onClick={() => removeRule(i)}
+                                                title={
+                                                    rule.isDefault
+                                                        ? msg("titleDefaultRuleNoDelete")
+                                                        : msg("titleDeleteRule")
+                                                }
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-2 w-full text-muted-foreground"
+                                    onClick={() => patchPrefs({ uncensored: !prefs.uncensored })}
+                                >
+                                    {prefs.uncensored ? (
+                                        <EyeOff data-icon="inline-start" />
+                                    ) : (
+                                        <Eye data-icon="inline-start" />
+                                    )}
+                                    {prefs.uncensored
+                                        ? msg("actionUncensoredHide")
+                                        : msg("actionUncensoredShow")}
+                                </Button>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+                </section>
+
                 <div className="mt-auto flex items-center pt-3">
                     <a
                         href="https://github.com/srnoob2570/termcard"
