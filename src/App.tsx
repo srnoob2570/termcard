@@ -540,10 +540,17 @@ export default function App() {
                             value={t.preset}
                             onValueChange={(v) => {
                                 if (!v) return;
-                                // The preset brings the COMPLETE theme from Rust:
-                                // no leftovers from the previous preset ever remain.
+                                // A preset contributes only its palette. Every
+                                // user-owned field (width mode/px, font size,
+                                // padding, margins, radius, title, prompt,
+                                // backdrop, traffic lights, shadow) survives.
                                 void api.presetTheme(v).then((full) => {
-                                    patchTheme(full);
+                                    patchTheme({
+                                        preset: full.preset,
+                                        background: full.background,
+                                        foreground: full.foreground,
+                                        accent: full.accent,
+                                    });
                                 });
                             }}
                         >
