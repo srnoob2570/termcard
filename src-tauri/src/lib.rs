@@ -313,6 +313,22 @@ async fn rfd_dialog(app: &AppHandle, name: &str) -> Result<String, String> {
     }
 }
 
+/// Opens a folder picker so the user can choose the command's working
+/// directory. Returns an empty string if the user cancels.
+#[tauri::command]
+async fn pick_directory(app: AppHandle, cwd: Option<String>) -> Result<String, String> {
+    // Fall back to $HOME when there is no usable starting directory.
+    let start = match cwd {
+        Some(p) if std::path::Path::new(&p).is_dir() => p,
+        _ => home_dir(),
+    };
+    let dialog = app.dialog().file().set_directory(start);
+    Ok(dialog
+        .blocking_pick_folder()
+        .map(|p| p.to_string())
+        .unwrap_or_default())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -338,7 +354,8 @@ pub fn run() {
             preset_theme,
             default_rules,
             get_home,
-            save_png
+            save_png,
+            pick_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

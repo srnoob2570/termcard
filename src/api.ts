@@ -126,4 +126,5 @@ export const api = {
     getHome: (): Promise<string> => invoke("get_home"),
     savePng: (base64Png: string, suggestedName: string): Promise<string> =>
         invoke("save_png", { base64Png, suggestedName }),
+    pickDirectory: (cwd: string): Promise<string> => invoke("pick_directory", { cwd: cwd || null }),
 };

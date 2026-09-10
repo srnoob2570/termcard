@@ -5,6 +5,7 @@ import {
     Download,
     Eye,
     EyeOff,
+    FolderOpen,
     Languages,
     OctagonX,
     Palette,
@@ -413,17 +414,32 @@ export default function App() {
                                     <FieldLabel htmlFor="cwd" className="text-xs">
                                         {msg("labelDirectory")}
                                     </FieldLabel>
-                                    <Input
-                                        id="cwd"
-                                        className="h-8 font-mono text-xs"
-                                        placeholder="~/"
-                                        value={prefs.cwd}
-                                        onChange={(e) => patchPrefs({ cwd: e.target.value })}
-                                        autoCapitalize="off"
-                                        autoCorrect="off"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                    />
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="cwd"
+                                            className="h-8 font-mono text-xs"
+                                            placeholder="~/"
+                                            value={prefs.cwd}
+                                            onChange={(e) => patchPrefs({ cwd: e.target.value })}
+                                            autoCapitalize="off"
+                                            autoCorrect="off"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                        />
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            aria-label={msg("browseDirectory")}
+                                            title={msg("browseDirectory")}
+                                            onClick={() =>
+                                                void api
+                                                    .pickDirectory(prefs.cwd)
+                                                    .then((p) => p && patchPrefs({ cwd: p }))
+                                            }
+                                        >
+                                            <FolderOpen />
+                                        </Button>
+                                    </div>
                                 </Field>
                             </FieldGroup>
                             <div className="mt-3 flex gap-2">
