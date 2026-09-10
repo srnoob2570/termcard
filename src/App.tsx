@@ -65,9 +65,16 @@ import { LANGS, translate, type Lang, type MessageKey } from "@/i18n";
 
 const PRESET_LABELS: Record<string, MessageKey> = {
     "mac-dark": "presetMacDark",
-    "mac-light": "presetMacLight",
-    minimal: "presetMinimal",
+    "tokyo-night": "presetTokyoNight",
+    dracula: "presetDracula",
+    "gruvbox-dark": "presetGruvboxDark",
+    nord: "presetNord",
     solarized: "presetSolarized",
+    "mac-light": "presetMacLight",
+    "catppuccin-latte": "presetLatte",
+    "solarized-light": "presetSolarizedLight",
+    "gruvbox-light": "presetGruvboxLight",
+    "nord-light": "presetNordLight",
 };
 
 export default function App() {
@@ -133,6 +140,11 @@ export default function App() {
                     }
                     if (typeof next.manualOutput !== "string") next.manualOutput = "";
                     if (!next.rules.length) next.rules = await api.defaultRules();
+                    // Presets removed from Rust keep the Select empty forever:
+                    // fall back to the default theme instead.
+                    if (!(next.theme.preset in PRESET_LABELS)) {
+                        next.theme = DEFAULT_PREFS.theme;
+                    }
                 } else {
                     next = {
                         ...DEFAULT_PREFS,

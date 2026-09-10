@@ -54,19 +54,35 @@ impl Default for Theme {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Preset {
+    // Dark presets.
     MacDark,
-    MacLight,
-    Minimal,
+    TokyoNight,
+    Dracula,
+    GruvboxDark,
+    Nord,
     Solarized,
+    // Light presets.
+    MacLight,
+    Latte,
+    SolarizedLight,
+    GruvboxLight,
+    NordLight,
 }
 
 impl Preset {
     /// All presets, in UI order.
-    pub const ALL: [Preset; 4] = [
+    pub const ALL: [Preset; 11] = [
         Preset::MacDark,
-        Preset::MacLight,
-        Preset::Minimal,
+        Preset::TokyoNight,
+        Preset::Dracula,
+        Preset::GruvboxDark,
+        Preset::Nord,
         Preset::Solarized,
+        Preset::MacLight,
+        Preset::Latte,
+        Preset::SolarizedLight,
+        Preset::GruvboxLight,
+        Preset::NordLight,
     ];
 
     /// Preset from its theme identifier (`preset` in the JSON).
@@ -78,9 +94,16 @@ impl Preset {
     pub fn id(self) -> &'static str {
         match self {
             Preset::MacDark => "mac-dark",
-            Preset::MacLight => "mac-light",
-            Preset::Minimal => "minimal",
+            Preset::TokyoNight => "tokyo-night",
+            Preset::Dracula => "dracula",
+            Preset::GruvboxDark => "gruvbox-dark",
+            Preset::Nord => "nord",
             Preset::Solarized => "solarized",
+            Preset::MacLight => "mac-light",
+            Preset::Latte => "catppuccin-latte",
+            Preset::SolarizedLight => "solarized-light",
+            Preset::GruvboxLight => "gruvbox-light",
+            Preset::NordLight => "nord-light",
         }
     }
 
@@ -90,18 +113,32 @@ impl Preset {
         let base = Theme::default();
         match self {
             Preset::MacDark => base,
-            Preset::MacLight => Theme {
-                preset: "mac-light".into(),
-                background: "#f5f5f4".into(),
-                foreground: "#3f3f46".into(),
-                accent: "#d20f39".into(),
+            Preset::TokyoNight => Theme {
+                preset: "tokyo-night".into(),
+                background: "#1a1b26".into(),
+                foreground: "#a9b1d6".into(),
+                accent: "#7aa2f7".into(),
                 ..base
             },
-            Preset::Minimal => Theme {
-                preset: "minimal".into(),
-                show_traffic_lights: false,
-                show_shadow: false,
-                title: String::new(),
+            Preset::Dracula => Theme {
+                preset: "dracula".into(),
+                background: "#282a36".into(),
+                foreground: "#f8f8f2".into(),
+                accent: "#bd93f9".into(),
+                ..base
+            },
+            Preset::GruvboxDark => Theme {
+                preset: "gruvbox-dark".into(),
+                background: "#282828".into(),
+                foreground: "#ebdbb2".into(),
+                accent: "#fe8019".into(),
+                ..base
+            },
+            Preset::Nord => Theme {
+                preset: "nord".into(),
+                background: "#2e3440".into(),
+                foreground: "#d8dee9".into(),
+                accent: "#88c0d0".into(),
                 ..base
             },
             Preset::Solarized => Theme {
@@ -111,6 +148,41 @@ impl Preset {
                 foreground: "#93a1a1".into(),
                 accent: "#b58900".into(),
                 show_shadow: false,
+                ..base
+            },
+            Preset::MacLight => Theme {
+                preset: "mac-light".into(),
+                background: "#f5f5f4".into(),
+                foreground: "#3f3f46".into(),
+                accent: "#d20f39".into(),
+                ..base
+            },
+            Preset::Latte => Theme {
+                preset: "catppuccin-latte".into(),
+                background: "#eff1f5".into(),
+                foreground: "#4c4f69".into(),
+                accent: "#8839ef".into(),
+                ..base
+            },
+            Preset::SolarizedLight => Theme {
+                preset: "solarized-light".into(),
+                background: "#fdf6e3".into(),
+                foreground: "#586e75".into(),
+                accent: "#268bd2".into(),
+                ..base
+            },
+            Preset::GruvboxLight => Theme {
+                preset: "gruvbox-light".into(),
+                background: "#fbf1c7".into(),
+                foreground: "#3c3836".into(),
+                accent: "#b57614".into(),
+                ..base
+            },
+            Preset::NordLight => Theme {
+                preset: "nord-light".into(),
+                background: "#eceff4".into(),
+                foreground: "#2e3440".into(),
+                accent: "#5e81ac".into(),
                 ..base
             },
         }
@@ -186,12 +258,26 @@ mod tests {
         assert!(t.show_traffic_lights);
     }
 
+    /// New presets use their official scheme colors.
     #[test]
-    fn preset_minimal_hides_chrome() {
-        let t = Preset::Minimal.theme();
-        assert!(!t.show_traffic_lights);
-        assert!(!t.show_shadow);
-        assert!(t.title.is_empty());
+    fn presets_use_official_palette() {
+        let cases: &[(&str, &str, &str, &str)] = &[
+            ("tokyo-night", "#1a1b26", "#a9b1d6", "#7aa2f7"),
+            ("dracula", "#282a36", "#f8f8f2", "#bd93f9"),
+            ("gruvbox-dark", "#282828", "#ebdbb2", "#fe8019"),
+            ("nord", "#2e3440", "#d8dee9", "#88c0d0"),
+            ("catppuccin-latte", "#eff1f5", "#4c4f69", "#8839ef"),
+            ("solarized-light", "#fdf6e3", "#586e75", "#268bd2"),
+            ("gruvbox-light", "#fbf1c7", "#3c3836", "#b57614"),
+            ("nord-light", "#eceff4", "#2e3440", "#5e81ac"),
+        ];
+        for (id, bg, fg, accent) in cases {
+            let preset = Preset::from_id(id).unwrap();
+            let t = preset.theme();
+            assert_eq!(t.background, *bg, "{}", id);
+            assert_eq!(t.foreground, *fg, "{}", id);
+            assert_eq!(t.accent, *accent, "{}", id);
+        }
     }
 
     #[test]

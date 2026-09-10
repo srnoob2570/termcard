@@ -82,9 +82,16 @@ const es = {
     colorTransparent: "Transparente",
     ariaColorHex: "Color en formato hexadecimal con alfa",
     presetMacDark: "Mac oscuro",
-    presetMacLight: "Mac claro",
-    presetMinimal: "Minimal",
+    presetTokyoNight: "Tokyo Night",
+    presetDracula: "Dracula",
+    presetGruvboxDark: "Gruvbox oscuro",
+    presetNord: "Nord",
     presetSolarized: "Solarized",
+    presetMacLight: "Mac claro",
+    presetLatte: "Catppuccin Latte",
+    presetSolarizedLight: "Solarized claro",
+    presetGruvboxLight: "Gruvbox claro",
+    presetNordLight: "Nord claro",
 };
 
 const en: typeof es = {
@@ -147,9 +154,16 @@ const en: typeof es = {
     colorTransparent: "Transparent",
     ariaColorHex: "Color in hexadecimal with alpha",
     presetMacDark: "Mac dark",
-    presetMacLight: "Mac light",
-    presetMinimal: "Minimal",
+    presetTokyoNight: "Tokyo Night",
+    presetDracula: "Dracula",
+    presetGruvboxDark: "Gruvbox dark",
+    presetNord: "Nord",
     presetSolarized: "Solarized",
+    presetMacLight: "Mac light",
+    presetLatte: "Catppuccin Latte",
+    presetSolarizedLight: "Solarized light",
+    presetGruvboxLight: "Gruvbox light",
+    presetNordLight: "Nord light",
 };
 
 export type MessageKey = keyof typeof es;
