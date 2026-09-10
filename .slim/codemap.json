@@ -1,0 +1,42 @@
+{
+    "metadata": {
+        "version": "1.0.0",
+        "last_run": "2026-09-10T04:22:48.434Z",
+        "root": "/home/srnoob/Documentos/srnoob2570/termcard",
+        "include_patterns": ["src/**/*.ts", "src/**/*.tsx", "src-tauri/src/**/*.rs"],
+        "exclude_patterns": [
+            "**/*.test.ts",
+            "node_modules/**",
+            "dist/**",
+            "src-tauri/target/**",
+            "src/components/ui/**",
+            "docs/**"
+        ],
+        "exceptions": []
+    },
+    "file_hashes": {
+        "src-tauri/src/capture.rs": "61c548b6ecf166eeaa9396397acd1875",
+        "src-tauri/src/export.rs": "0170fd08c33c0f9b489b26de7b1aa5bf",
+        "src-tauri/src/ir.rs": "ab4fa59b2c4a7b8f7aae920db4d82e45",
+        "src-tauri/src/lib.rs": "92a61bbf2615648e5108f5631f1ffdde",
+        "src-tauri/src/main.rs": "b54bb26bb8b761553265e2f8a7dd85c7",
+        "src-tauri/src/redact.rs": "ec33ffe659666f08628b063081444d56",
+        "src-tauri/src/theme.rs": "dd2681f930ee09d87e27da2398e70bd8",
+        "src/App.tsx": "0d012c0acb63f38092a1ac92bb037cd5",
+        "src/api.ts": "c0bb433723aee72faae42600ff8d0e09",
+        "src/components/color-field.tsx": "f94d07cb55ae0522d1c5b361058601a9",
+        "src/i18n.ts": "238d29f821cd659f667d1ee109d9ec80",
+        "src/lib/utils.ts": "af7c2d37d6b451d832f5d6db92e9bcb4",
+        "src/main.tsx": "dc4046ac0753030155337b8367e2755c",
+        "src/manual.ts": "809c6ce6c2e6f43a10995c7c81d05d82",
+        "src/vite-env.d.ts": "f996645c8fb714a185cba7da5736cb74"
+    },
+    "folder_hashes": {
+        ".": "",
+        "src-tauri": "f51405cb67573846dc0610d37daa889d",
+        "src-tauri/src": "f51405cb67573846dc0610d37daa889d",
+        "src": "650803cb1602c46386fa24f9cb13289c",
+        "src/components": "e669bdb6ad78e1e659c3096f802df64f",
+        "src/lib": "c28103c4a8a4cd140cc0f276e292c5a3"
+    }
+}

@@ -24,15 +24,15 @@ Prefs: hand-rolled once_store JSON blob at app_config_dir/termcard-store.json (o
 - Blocking work always goes through `tokio::task::spawn_blocking` (capture) / `tauri::async_runtime::spawn_blocking` (render), guarded by `AppState { stop: Arc<AtomicBool>, running: tokio::sync::Mutex<bool> }` (single capture at a time, 5MB buffer cap, 120s timeout, stop flag kills the PTY).
 - `run_capture` takes `cwd: Option<String>`.
 
-Rust backend (`termcard_lib`, flat modules): `lib.rs` (11 `#[tauri::command]`s + `AppState` + `once_store`), `capture.rs` (PTY), `ir.rs` (Capture/Line/Run/Color, `from_vt100` with run merging, `Capture::trimmed`), `redact.rs` (regex rules + LazyLock cache), `theme.rs` (Theme + `Preset::theme()` as single source of truth, ANSI-256 `Palette`), `export.rs` (hand-built SVG, `CH_WIDTH 0.6` / `LINE_HEIGHT 1.2`, + resvg PNG).
+Rust backend (`termcard_lib`, flat modules): `lib.rs` (12 `#[tauri::command]`s + `AppState` + `once_store`), `capture.rs` (PTY), `ir.rs` (Capture/Line/Run/Color, `from_vt100` with run merging, `Capture::trimmed`), `redact.rs` (regex rules + LazyLock cache), `theme.rs` (Theme + `Preset::theme()` as single source of truth, ANSI-256 `Palette`), `export.rs` (hand-built SVG, `CH_WIDTH 0.6` / `LINE_HEIGHT 1.2`, + resvg PNG).
 
 Preview fonts: `export::render_svg` emits `font-family="JetBrains Mono"` only — no embedded `@font-face`. The frontend installs the CSS once at document level via the `font_css` command (`export::font_css`, ~1.4 MB base64) in a startup `<style>` tag. Per-render embedding shipped the payload inside every preview SVG and made each keystroke re-parse it (measured: ~half the keystroke latency). `render_png` resolves fonts through `fontdb` and never embeds.
 
-Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (11 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings are English; the frontend wraps them (`Error: {detail}`).
+Frontend: `main.tsx` → `App.tsx` (entire UI, one component; no router/store/context) → `api.ts` (12 typed `invoke()` wrappers + TS mirrors of Rust structs). Theme preset changes fetch the COMPLETE theme from Rust via `presetTheme` and replace it wholesale (no partial overrides survive a preset switch). `Ctrl/Cmd+Enter` runs the capture. UI strings come from `src/i18n.ts` (`translate()`, es/en dictionaries, `en: typeof es` so tsc enforces key parity); the language selector persists `prefs.lang`, App.tsx reads it through a `msg()` helper (never name it `t`: collides with the theme alias). Backend error strings are English; the frontend wraps them (`Error: {detail}`).
 
 ## Key Directories
 
-- `src/` — React 19 frontend: `App.tsx`, `api.ts`, `i18n.ts` (es/en UI dictionaries, `detectLang`), `components/color-field.tsx` (custom react-colorful alpha picker in a Popover, handles "transparent"/#rrggbb/rgba() ↔ #rrggbbaa; takes translated `ariaLabel`/`hexAriaLabel`/`transparentLabel` props), `components/ui/` (shadcn `base-nova` on `@base-ui/react`), `styles.css` (Tailwind v4)
+- `src/` — React 19 frontend: `App.tsx`, `api.ts`, `i18n.ts` (es/en UI dictionaries, `detectLang`), `components/color-field.tsx` (custom react-colorful alpha picker in a Popover, handles "transparent"/#rrggbb/rgba() ↔ #rrggbbaa; takes translated `ariaLabel`/`hexAriaLabel`/`transparentLabel` props), `components/ui/` (shadcn `base-nova` on `@base-ui/react`), `styles.css` (Tailwind v4), `manual.ts` (`buildManualCapture`: builds a Capture from pasted output instead of a PTY run, feeding the same export pipeline)
 - `src-tauri/src/` — Rust backend modules above; `main.rs` is a thin shim calling `termcard_lib::run()`
 - `src-tauri/fonts/` — JetBrains Mono TTFs, embedded via `include_bytes!` + `LazyLock`
 - `docs/superpowers/specs/` — design spec (read before architectural changes)
@@ -48,7 +48,7 @@ bun run dev        # web-only Vite dev server (no Tauri shell), port 1420 strict
 bun run build      # tsc && vite build — tsc IS the typecheck gate
 bun run preview    # serve production build
 bun run tauri build # release bundle (.deb/AppImage)
-cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
+cd src-tauri && cargo test   # 38 tests (all inline `#[cfg(test)]` modules)
 ```
 
 - Plain `bun run tauri dev` fails: `bun run app` exists precisely to prepend `~/.cargo/bin`.
@@ -75,7 +75,7 @@ cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
 - shadcn/ui on `@base-ui/react` (style `base-nova` per `components.json`), cva, lucide-react icons, `data-slot` attributes. Tailwind v4 CSS-first (`@theme inline`, oklch vars, `@custom-variant dark`); app is dark-only (hardcoded `class="dark"` in `index.html`).
 - SVG imports: `*.svg?raw` typed in `src/vite-env.d.ts` (used for the GitHub mark in `src/assets/`).
 
-**Cross-boundary contract**: adding an IPC command touches `lib.rs` (command + `generate_handler![]`) and `api.ts` (struct mirror + invoke wrapper). Missing either side fails `tsc` or the runtime invoke. Current 11 commands: `get_prefs`, `save_prefs`, `run_capture`, `stop_capture`, `export_png`, `export_svg`, `font_css`, `preset_theme`, `default_rules`, `get_home`, `save_png`.
+**Cross-boundary contract**: adding an IPC command touches `lib.rs` (command + `generate_handler![]`) and `api.ts` (struct mirror + invoke wrapper). Missing either side fails `tsc` or the runtime invoke. Current 11 commands: `get_prefs`, `save_prefs`, `run_capture`, `stop_capture`, `export_png`, `export_svg`, `font_css`, `preset_theme`, `default_rules`, `get_home`, `save_png`, `pick_directory` (folder dialog via AppHandle, returns "" on cancel).
 
 ## Important Files
 
@@ -95,7 +95,7 @@ cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
 
 ## Testing & QA
 
-- Rust-only suite, 35 tests, all inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 3). No frontend tests, no coverage tooling.
+- Rust-only suite, 38 tests, all inline `#[cfg(test)] mod tests` at file bottom with `use super::*` (capture 6, ir 10, redact 9, theme 7, export 6). No frontend tests, no coverage tooling.
 - Naming: snake_case behavioral names (`svg_escapes_xml`, `disabled_rules_skipped`). Fixtures are in-module helper functions, not files.
 - `capture.rs` tests are **not hermetic**: they spawn real shell commands and depend on PATH, GNU `ls --color=always`, and `/tmp`. `stop_flag_kills_hanging_command` is the slowest/flakiest (150ms timing race, spawns `sleep 60`).
 - pre-commit framework (`.pre-commit-config.yaml`, installed via `pre-commit install` — `package.json` `prepare` does it when the binary is on PATH): `end-of-file-fixer` (final newline on every file), prettier (web files), rustfmt + `cargo fmt --check` + `cargo test` (Rust; PATH export prepends `~/.cargo/bin`). Local hooks, no stale mirror repos. Global pass: `pre-commit run --all-files`.
@@ -104,3 +104,15 @@ cd src-tauri && cargo test   # 35 tests (all inline `#[cfg(test)]` modules)
     - Preset definitions live in `theme.rs::Preset::theme` only; `App.tsx::PRESET_LABELS` holds display labels.
     - The synthetic `❯ <command>` prompt line is rendered by both SVG and PNG renderers; the displayed command goes through redaction like captured text.
     - UI strings live only in `src/i18n.ts`: `es` is the key source, `en` typed `typeof es` (key parity is a tsc failure). Identical-in-both-languages literals ("Preset", "Padding", "regex", "Traffic lights", "termcard", "v0.1", "2×/3×/4×") stay inline.
+
+## Repository Map
+
+A full codemap is available at `codemap.md` in the project root.
+
+Before working on any task, read `codemap.md` to understand:
+
+- Project architecture and entry points
+- Directory responsibilities and design patterns
+- Data flow and integration points between modules
+
+For deep work on a specific folder, also read that folder's `codemap.md`.
