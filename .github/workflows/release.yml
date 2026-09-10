@@ -10,14 +10,14 @@ jobs:
         permissions:
             contents: write
         # runs-on: ubuntu-latest
-        # Toolchain deps (GTK/WebKit libs, Rust) are baked into the cron-runner
-        # image; no sudo apt-get possible on that runner.
+        # GTK/WebKit system libs are baked into the cron-runner image; no
+        # sudo apt-get possible on that runner. Rust toolchain is installed
+        # per-run (user-local rustup, no sudo needed).
         runs-on: [self-hosted, cron-runner]
         steps:
             - uses: actions/checkout@v4
 
-            - name: Add cargo to PATH
-              run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            - uses: dtolnay/rust-toolchain@stable
 
             - uses: oven-sh/setup-bun@v2
 
