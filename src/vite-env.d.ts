@@ -8,4 +8,7 @@ declare module "*.svg?raw" {
     export default markup;
 }
 
+/** Injected by Vite `define` from package.json `version` (vite.config.ts). */
+declare const __APP_VERSION__: string;
+
 declare module "*.css";

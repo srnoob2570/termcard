@@ -14,7 +14,6 @@ import {
     Trash2,
 } from "lucide-react";
 import githubMark from "@/assets/github-mark.svg?raw";
-
 // Primer's official Octicon `mark-github-16`: lucide-react no longer ships
 // brand icons. Inlined (?raw) so `fill="currentColor"` inherits the link's
 // color; as <img> the SVG can't see the parent color and renders black.
@@ -655,11 +654,11 @@ export default function App() {
                             e.preventDefault();
                             void openUrl("https://github.com/srnoob2570/termcard");
                         }}
-                        title={msg("githubTitle")}
+                        title={msg("githubTitle", { version: __APP_VERSION__ })}
                         className="inline-flex h-6 items-center gap-1.5 rounded-4xl border border-border bg-secondary px-2 text-[10px] font-medium text-foreground transition-colors hover:bg-muted"
                     >
                         <GithubIcon />
-                        <span className="font-mono">v0.1.2</span>
+                        <span className="font-mono">v{__APP_VERSION__}</span>
                     </a>
                 </div>
             </aside>
