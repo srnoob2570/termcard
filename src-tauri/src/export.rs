@@ -444,7 +444,9 @@ mod tests {
         use crate::theme::Preset;
         let (cap, _, _palette) = sample();
         let shadowed = layout(&cap, &Preset::MacDark.theme());
-        let flat = layout(&cap, &Preset::Solarized.theme());
+        let mut flat = Preset::MacDark.theme();
+        flat.show_shadow = false;
+        let flat = layout(&cap, &flat);
         // 2 * shadow gap (8px per side).
         assert_eq!(shadowed.width - flat.width, 16.0);
         assert_eq!(shadowed.height - flat.height, 16.0);

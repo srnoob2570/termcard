@@ -143,11 +143,9 @@ impl Preset {
             },
             Preset::Solarized => Theme {
                 preset: "solarized".into(),
-                backdrop: "transparent".into(),
                 background: "#002b36".into(),
                 foreground: "#93a1a1".into(),
                 accent: "#b58900".into(),
-                show_shadow: false,
                 ..base
             },
             Preset::MacLight => Theme {
@@ -280,13 +278,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn preset_solarized_disables_shadow() {
-        let t = Preset::Solarized.theme();
-        assert!(!t.show_shadow);
-        assert!(t.show_traffic_lights);
-    }
-
     /// All presets share the normalized layout geometry; only colors and
     /// chrome differ between them.
     #[test]
@@ -298,6 +289,7 @@ mod tests {
             assert_eq!(t.padding, 24, "{}", preset.id());
             assert_eq!(t.outer_margin, 8, "{}", preset.id());
             assert_eq!(t.backdrop, "transparent", "{}", preset.id());
+            assert!(t.show_shadow, "{}", preset.id());
         }
     }
 
