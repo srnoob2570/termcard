@@ -18,6 +18,11 @@ jobs:
             - uses: actions/checkout@v4
 
             - uses: dtolnay/rust-toolchain@stable
+              env:
+                  # Image ships RUSTUP_HOME/CARGO_HOME under /usr/local (not
+                  # writable by the job user); install user-local instead.
+                  RUSTUP_HOME: ${{ runner.temp }}/rustup
+                  CARGO_HOME: ${{ runner.temp }}/cargo
 
             - uses: oven-sh/setup-bun@v2
 
