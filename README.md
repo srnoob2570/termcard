@@ -6,15 +6,15 @@ Type a shell command, run it in a PTY inside the app, and export the terminal sc
 
 ANSI 256-color palette dump:
 
-![ANSI 256-color palette](docs/images/ansi-256.png)
+![jq output](docs/images/jq-github.png)
 
 Git history with decorations:
 
-![Git log](docs/images/git-log.png)
+![Python traceback](docs/images/python-traceback.png)
 
 Real API request through `jq`:
 
-![jq output](docs/images/jq-github.png)
+![Git log](docs/images/git-log.png)
 
 Project tree:
 
@@ -22,7 +22,7 @@ Project tree:
 
 Error capture (Python traceback):
 
-![Python traceback](docs/images/python-traceback.png)
+![ANSI 256-color palette](docs/images/ansi-256.png)
 
 ## How it works
 
