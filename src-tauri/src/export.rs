@@ -76,13 +76,18 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     let pad = theme.padding as f32;
     // Gap reserved around the window so the shadow can breathe.
     let shadow_gap = if theme.show_shadow { 8.0 } else { 0.0 };
-    let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // per side
+    // Total frame around the window: outer margin + shadow gap, both sides.
+    let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0;
+    // Size floors apply to the WINDOW (the card itself), never to the outer
+    // SVG: presets without a shadow have a smaller frame, and flooring the
+    // outer size would dump the leftover as extra padding inside their
+    // window. The window must render identically for every preset.
     let width = match theme.card_width {
         // Manual: the card (terminal window) is exactly this many px wide.
         // The PTY wraps to the matching column count at capture time
         // (`pty_cols`), so text fits; a capture taken at another width can
         // still overflow (re-capture to flow it again).
-        Some(w) => (pad * 2.0 + w as f32 + frame).max(420.0),
+        Some(w) => (pad * 2.0 + w as f32).max(420.0) + frame,
         // Automatic: longest line (prompt included) + padding.
         None => {
             let prompt_len =
@@ -94,10 +99,13 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
                 .chain(std::iter::once(prompt_len))
                 .max()
                 .unwrap_or(20) as f32;
-            (pad + longest * theme.font_size as f32 * CH_WIDTH + pad + frame).max(420.0)
+            (pad + longest * theme.font_size as f32 * CH_WIDTH + pad).max(420.0) + frame
         }
     };
-    let height = (pad + chrome + line_h * visible as f32 + pad + frame).max(160.0);
+    // The window reserves exactly one `padding` below the last line — the
+    // preset's (or custom) padding. No height floor: flooring used to dump
+    // the leftover inside the window as a dead zone below the text.
+    let height = chrome + line_h * visible as f32 + pad + frame;
     Layout { width, height }
 }
 
@@ -409,15 +417,16 @@ mod tests {
 
     #[test]
     fn manual_card_width_is_exact() {
-        let (mut cap, mut theme, palette) = sample();
+        let (mut cap, mut theme, _palette) = sample();
         theme.card_width = Some(160);
-        // 420 floor wins: 160 + 24*2 padding + (8*2+8*2) frame = 240 < 420.
+        // Window floor 420 wins: 160 + 24*2 = 208 < 420. Outer adds the
+        // shadow frame: 420 + (8*2 + 8*2) = 452.
         let l = layout(&cap, &theme);
-        assert_eq!(l.width, 420.0);
+        assert_eq!(l.width, 452.0);
         assert!(l.width > 160.0);
         // Manual beats content: a longer line does not grow the card.
         cap.lines[0].runs[0].text = "x".repeat(400);
-        assert_eq!(layout(&cap, &theme).width, 420.0);
+        assert_eq!(layout(&cap, &theme).width, 452.0);
     }
 
     #[test]
@@ -428,10 +437,46 @@ mod tests {
         assert_eq!(layout(&cap, &theme).width, 680.0);
     }
 
+    /// Shadowed and shadowless presets render the same WINDOW; only the
+    /// outer frame (margin + shadow gap) differs.
+    #[test]
+    fn window_size_independent_of_shadow() {
+        use crate::theme::Preset;
+        let (cap, _, _palette) = sample();
+        let shadowed = layout(&cap, &Preset::MacDark.theme());
+        let flat = layout(&cap, &Preset::Solarized.theme());
+        // 2 * shadow gap (8px per side).
+        assert_eq!(shadowed.width - flat.width, 16.0);
+        assert_eq!(shadowed.height - flat.height, 16.0);
+    }
+
+    /// Height follows the content exactly: chrome + line boxes + ONE bottom
+    /// padding, plus the frame. No floor — a floor used to dump its leftover
+    /// inside the window as a dead zone below the text.
+    #[test]
+    fn height_tracks_content_with_bottom_padding() {
+        let (mut cap, theme, _palette) = sample();
+        cap.lines.truncate(2);
+        // chrome 44 + prompt/output line boxes 16.8 * 3 + bottom pad 24
+        // + frame (8*2 + 8*2).
+        let expect = |n_lines: f32| 44.0 + 16.8 * n_lines + 24.0 + 32.0;
+        assert!((layout(&cap, &theme).height - expect(3.0)).abs() < 0.01);
+        // One more line grows the card by exactly one line box.
+        cap.lines.push(Line::from_runs(vec![Run {
+            text: "x".into(),
+            fg: None,
+            bg: None,
+            bold: false,
+            italic: false,
+            underline: false,
+        }]));
+        assert!((layout(&cap, &theme).height - expect(4.0)).abs() < 0.01);
+    }
+
     #[test]
     fn automatic_width_ignores_manual_setting() {
-        let (cap, mut theme, _palette) = sample();
-        assert_eq!(layout(&cap, &theme).width, 420.0);
+        let (cap, theme, _palette) = sample();
+        assert_eq!(layout(&cap, &theme).width, 452.0);
     }
 
     #[test]
