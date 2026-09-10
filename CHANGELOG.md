@@ -2,6 +2,25 @@
 
 All notable changes to termcard are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-09-10
+
+### Added
+
+- Manual capture mode: paste terminal output and build a card from it without running a command, through the same preview and export pipeline as a captured run. The controls move to a left panel beside the preview.
+- Directory picker button next to the working-directory field, so the folder can be chosen from a dialog instead of typed.
+
+### Changed
+
+- The pseudo-terminal is sized to the card width at capture time, so long lines wrap exactly where the exported card wraps them.
+- Presets share one layout geometry, so switching a preset only changes colors. The list grows from four to eleven presets, with dark and light palettes for Tokyo Night, Dracula, Gruvbox, Nord, and Catppuccin Latte; the Minimal preset is removed. Presets now enable the window shadow by default.
+
+### Fixed
+
+- The card no longer clips at the bottom edge: window sizes are computed and floored outside the frame, and the bottom padding is back.
+- Switching presets keeps the fields you customized instead of resetting them.
+
+**Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.2...v0.1.3
+
 ## [0.1.2] - 2026-09-09
 
 ### Added
