@@ -105,8 +105,13 @@ export const DEFAULT_PREFS: Prefs = {
 export const api = {
     getPrefs: (): Promise<Prefs> => invoke("get_prefs"),
     savePrefs: (prefs: Prefs): Promise<void> => invoke("save_prefs", { prefs }),
-    runCapture: (command: string, cwd: string): Promise<CaptureResult> =>
-        invoke("run_capture", { command, cwd: cwd || null }),
+    runCapture: (
+        command: string,
+        cwd: string,
+        cardWidth: number | null,
+        fontSize: number
+    ): Promise<CaptureResult> =>
+        invoke("run_capture", { command, cwd: cwd || null, cardWidth, fontSize }),
     stopCapture: (): Promise<void> => invoke("stop_capture"),
     exportPng: (
         capture: Capture,

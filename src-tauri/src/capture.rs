@@ -210,6 +210,22 @@ mod tests {
     }
 
     #[test]
+    fn narrow_pty_wraps_long_output() {
+        // 15 chars at 10 columns wrap into two physical lines: the line
+        // break comes from the terminal, not the exporter.
+        let out = run_command("printf abcdefghijklmno", None, 10, 24, None).unwrap();
+        let line = |i: usize| -> String {
+            out.capture.lines[i]
+                .runs
+                .iter()
+                .map(|r| r.text.as_str())
+                .collect()
+        };
+        assert_eq!(line(0), "abcdefghij");
+        assert_eq!(line(1), "klmno");
+    }
+
+    #[test]
     fn stop_flag_kills_hanging_command() {
         let stop = std::sync::Arc::new(AtomicBool::new(false));
         let flag = stop.clone();

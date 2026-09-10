@@ -91,11 +91,16 @@ pub struct CaptureResult {
 /// Runs the command in a PTY and returns the capture UNREDACTED:
 /// redaction is applied at render time (preview/export) so that editing
 /// rules updates the preview without re-capturing.
+///
+/// The PTY size derives from the card (`pty_cols`/`pty_rows`): the terminal
+/// itself wraps the output to what the exported card will show.
 #[tauri::command]
 async fn run_capture(
     state: State<'_, AppState>,
     command: String,
     cwd: Option<String>,
+    card_width: Option<u32>,
+    font_size: u32,
 ) -> Result<CaptureResult, String> {
     {
         let mut running = state.running.lock().await;
@@ -116,7 +121,14 @@ async fn run_capture(
     // The PTY is blocking; run it on a separate thread so the runtime isn't blocked.
     let stop = state.stop.clone();
     let joined = tokio::task::spawn_blocking(move || {
-        capture::run_command(&command, cwd.as_deref(), 240, 80, Some(&*stop))
+        let cols = export::pty_cols(card_width, font_size);
+        capture::run_command(
+            &command,
+            cwd.as_deref(),
+            cols,
+            export::pty_rows(cols),
+            Some(&*stop),
+        )
     })
     .await;
 

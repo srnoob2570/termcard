@@ -8,6 +8,31 @@ use std::sync::LazyLock;
 const CH_WIDTH: f32 = 0.6;
 const LINE_HEIGHT: f32 = 1.2;
 
+/// PTY column count matching the card's text area, so the terminal itself
+/// wraps the output at the width the card will show: `cardWidth` px divided
+/// by the char width (`fontSize * CH_WIDTH`). `None` (auto width) keeps the
+/// 240-column ceiling: the card fits the longest line, nothing can overflow.
+pub fn pty_cols(card_width: Option<u32>, font_size: u32) -> u16 {
+    match card_width {
+        None => 240,
+        Some(w) => {
+            let cols = w as f32 / (font_size as f32 * CH_WIDTH);
+            // Sane floor (a degenerate 5-col wrap is useless) and the same
+            // 240 ceiling the PTY always had. A NaN/inf font_size saturates
+            // through the `as` cast and clamps to a bound, never panics.
+            (cols as u16).clamp(20, 240)
+        }
+    }
+}
+
+/// PTY rows keeping the cell budget of the default 240×80 grid: a narrower
+/// PTY wraps the same output into more lines and the grid has no scrollback,
+/// so a fixed 80 rows would cut long outputs. `cols >= 20` (guaranteed by
+/// `pty_cols`) keeps the division safe.
+pub fn pty_rows(cols: u16) -> u16 {
+    (240 * 80 / u32::from(cols)).clamp(80, 500) as u16
+}
+
 static FONTS: LazyLock<Fonts> = LazyLock::new(Fonts::load);
 
 struct Fonts {
@@ -54,8 +79,9 @@ pub fn layout(capture: &Capture, theme: &Theme) -> Layout {
     let frame = theme.outer_margin as f32 * 2.0 + shadow_gap * 2.0; // per side
     let width = match theme.card_width {
         // Manual: the card (terminal window) is exactly this many px wide.
-        // A too-narrow value lets text overflow the window; the card never
-        // grows beyond the request (re-capture to flow the text again).
+        // The PTY wraps to the matching column count at capture time
+        // (`pty_cols`), so text fits; a capture taken at another width can
+        // still overflow (re-capture to flow it again).
         Some(w) => (pad * 2.0 + w as f32 + frame).max(420.0),
         // Automatic: longest line (prompt included) + padding.
         None => {
@@ -406,6 +432,24 @@ mod tests {
     fn automatic_width_ignores_manual_setting() {
         let (cap, mut theme, _palette) = sample();
         assert_eq!(layout(&cap, &theme).width, 420.0);
+    }
+
+    #[test]
+    fn pty_cols_match_card_width() {
+        // Auto width keeps the 240-column ceiling.
+        assert_eq!(pty_cols(None, 14), 240);
+        // 600 px at font 14: 600 / (14 * 0.6) = 71.4 → 71 columns.
+        assert_eq!(pty_cols(Some(600), 14), 71);
+        // Clamps: a tiny width floors at 20, a huge width caps at 240.
+        assert_eq!(pty_cols(Some(100), 32), 20);
+        assert_eq!(pty_cols(Some(4096), 8), 240);
+    }
+
+    #[test]
+    fn pty_rows_keep_cell_budget() {
+        assert_eq!(pty_rows(240), 80); // the default size
+        assert_eq!(pty_rows(20), 500); // narrow: clamped ceiling
+        assert_eq!(pty_rows(71), 270); // 19200 / 71
     }
 
     #[test]

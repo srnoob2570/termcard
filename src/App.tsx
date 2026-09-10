@@ -213,7 +213,14 @@ export default function App() {
         // The "uncensored" toggle is temporary: only for the current preview.
         if (prefs.uncensored) patchPrefs({ uncensored: false });
         try {
-            const res = await api.runCapture(prefs.command, prefs.cwd);
+            // The PTY wraps to the card width: pass it so the terminal
+            // itself produces the line breaks the exported card will show.
+            const res = await api.runCapture(
+                prefs.command,
+                prefs.cwd,
+                prefs.theme.cardWidth,
+                prefs.theme.fontSize
+            );
             setCapture(res.capture);
             const n = res.capture.lines.filter((l) => l.runs.length > 0).length;
             let done = msg("statusCaptureDone", { n });
