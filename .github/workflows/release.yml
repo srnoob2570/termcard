@@ -11,18 +11,14 @@ jobs:
             contents: write
         # runs-on: ubuntu-latest
         # GTK/WebKit system libs are baked into the cron-runner image; no
-        # sudo apt-get possible on that runner. Rust toolchain is installed
-        # per-run (user-local rustup, no sudo needed).
+        # sudo apt-get possible on that runner. Rust toolchain installs
+        # per-run and persists via CARGO_HOME/RUSTUP_HOME on the runner
+        # cache volume (set in the cron-runner compose file).
         runs-on: [self-hosted, cron-runner]
         steps:
             - uses: actions/checkout@v6
 
             - uses: dtolnay/rust-toolchain@stable
-              env:
-                  # Image ships RUSTUP_HOME/CARGO_HOME under /usr/local (not
-                  # writable by the job user); install user-local instead.
-                  RUSTUP_HOME: ${{ runner.temp }}/rustup
-                  CARGO_HOME: ${{ runner.temp }}/cargo
 
             - uses: oven-sh/setup-bun@v2
 
