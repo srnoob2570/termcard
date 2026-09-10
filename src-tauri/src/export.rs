@@ -411,7 +411,7 @@ mod tests {
     fn manual_card_width_is_exact() {
         let (mut cap, mut theme, palette) = sample();
         theme.card_width = Some(160);
-        // 420 floor wins: 160 + 24*2 padding + (16*2+8*2) frame = 256 < 420.
+        // 420 floor wins: 160 + 24*2 padding + (8*2+8*2) frame = 240 < 420.
         let l = layout(&cap, &theme);
         assert_eq!(l.width, 420.0);
         assert!(l.width > 160.0);
@@ -424,8 +424,8 @@ mod tests {
     fn manual_card_width_above_floor() {
         let (cap, mut theme, _palette) = sample();
         theme.card_width = Some(600);
-        // 600 + 24*2 + (16*2 + 8*2) = 696: exact window + frame, no content influence.
-        assert_eq!(layout(&cap, &theme).width, 696.0);
+        // 600 + 24*2 + (8*2 + 8*2) = 680: exact window + frame, no content influence.
+        assert_eq!(layout(&cap, &theme).width, 680.0);
     }
 
     #[test]

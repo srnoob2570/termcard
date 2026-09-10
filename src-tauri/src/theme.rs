@@ -42,7 +42,7 @@ impl Default for Theme {
             show_traffic_lights: true,
             show_shadow: true,
             corner_radius: 12,
-            outer_margin: 16,
+            outer_margin: 8,
             padding: 24,
             font_size: 14,
             card_width: None,
@@ -101,7 +101,6 @@ impl Preset {
                 preset: "minimal".into(),
                 show_traffic_lights: false,
                 show_shadow: false,
-                corner_radius: 6,
                 title: String::new(),
                 ..base
             },
@@ -112,7 +111,6 @@ impl Preset {
                 foreground: "#93a1a1".into(),
                 accent: "#b58900".into(),
                 show_shadow: false,
-                corner_radius: 8,
                 ..base
             },
         }
@@ -200,10 +198,21 @@ mod tests {
     fn preset_solarized_disables_shadow() {
         let t = Preset::Solarized.theme();
         assert!(!t.show_shadow);
-        assert_eq!(t.corner_radius, 8);
-        assert_eq!(t.outer_margin, 16);
         assert!(t.show_traffic_lights);
-        assert_eq!(t.backdrop, "transparent");
+    }
+
+    /// All presets share the normalized layout geometry; only colors and
+    /// chrome differ between them.
+    #[test]
+    fn presets_share_normalized_layout() {
+        for preset in Preset::ALL {
+            let t = preset.theme();
+            assert_eq!(t.font_size, 14, "{}", preset.id());
+            assert_eq!(t.corner_radius, 12, "{}", preset.id());
+            assert_eq!(t.padding, 24, "{}", preset.id());
+            assert_eq!(t.outer_margin, 8, "{}", preset.id());
+            assert_eq!(t.backdrop, "transparent", "{}", preset.id());
+        }
     }
 
     #[test]

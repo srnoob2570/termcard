@@ -91,7 +91,7 @@ export const DEFAULT_PREFS: Prefs = {
         showTrafficLights: true,
         showShadow: true,
         cornerRadius: 12,
-        outerMargin: 16,
+        outerMargin: 8,
         padding: 24,
         fontSize: 14,
         promptSymbol: "❯",
