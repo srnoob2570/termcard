@@ -16,6 +16,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Add cargo to PATH
+              run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
             - uses: oven-sh/setup-bun@v2
 
             - name: Install frontend dependencies
