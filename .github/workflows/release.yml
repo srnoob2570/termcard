@@ -32,6 +32,9 @@ jobs:
             - uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Small runner host: cargo dies mid-compile (OOM) with
+                  # default parallel jobs.
+                  CARGO_BUILD_JOBS: "1"
               with:
                   tagName: ${{ github.ref_name }}
                   releaseName: ${{ github.ref_name }}
