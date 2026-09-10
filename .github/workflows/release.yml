@@ -10,16 +10,13 @@ jobs:
         permissions:
             contents: write
         # runs-on: ubuntu-latest
-        runs-on: self-hosted
+        # Toolchain deps (GTK/WebKit libs, Rust) are baked into the cron-runner
+        # image; no sudo apt-get possible on that runner.
+        runs-on: [self-hosted, cron-runner]
         steps:
             - uses: actions/checkout@v4
 
             - uses: oven-sh/setup-bun@v2
-
-            - name: Install Tauri system dependencies
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
             - name: Install frontend dependencies
               run: bun install
