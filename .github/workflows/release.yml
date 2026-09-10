@@ -25,11 +25,24 @@ jobs:
             - name: Install frontend dependencies
               run: bun install
 
+            # Extract this tag's section from CHANGELOG.md as the release
+            # body. tauri-action overwrites the body on every run, so without
+            # releaseBody it resets an existing release to an empty body.
+            - name: Extract changelog section
+              id: notes
+              run: |
+                  {
+                      echo "body<<EOF"
+                      awk -v t="${GITHUB_REF_NAME#v}" '$0 ~ "^## \\["t"\\]"{p=1; next} /^## \[/{p=0} p' CHANGELOG.md
+                      echo "EOF"
+                  } >> "$GITHUB_OUTPUT"
+
             - uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   tagName: ${{ github.ref_name }}
                   releaseName: ${{ github.ref_name }}
+                  releaseBody: ${{ steps.notes.outputs.body }}
                   releaseDraft: false
                   prerelease: false
