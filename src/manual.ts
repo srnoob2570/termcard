@@ -151,6 +151,13 @@ function mergeStyle(style: Style, el: Element): Style {
     if (tag === "I" || tag === "EM") s.italic = true;
     if (tag === "U") s.underline = true;
 
+    // Legacy <font color="..."> (emitted by rich, ansi2html, ...)
+    const attrColor = el.getAttribute("color");
+    if (attrColor) {
+        const c = cssColor(attrColor);
+        if (c) s.fg = c;
+    }
+
     const st = el.getAttribute("style");
     if (!st) return s;
     for (const decl of st.split(";")) {
