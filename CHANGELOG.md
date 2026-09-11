@@ -16,6 +16,8 @@ All notable changes to termcard are documented in this file. The format follows 
 
 ### Fixed
 
+- Release builds can now run commands installed outside the system PATH: the captured pseudo-terminal augments the inherited PATH with the user's local bin directories (`~/bin`, `~/.local/bin`, `~/.cargo/bin`, `~/.bun/bin`, `~/go/bin`).
+- The app ships its own icon instead of the default Tauri logo.
 - The card no longer clips at the bottom edge: window sizes are computed and floored outside the frame, and the bottom padding is back.
 - Switching presets keeps the fields you customized instead of resetting them.
 

@@ -20,6 +20,25 @@ impl std::fmt::Display for CaptureError {
 
 impl std::error::Error for CaptureError {}
 
+/// Desktop launchers (installed .deb) start the app with a minimal PATH that
+/// lacks user-local bin dirs, and `$SHELL -c` is non-login so it never
+/// sources `~/.profile` to repair it. Append the usual user-local dirs that
+/// actually exist so commands like `opencode` or `omp` resolve.
+/// ponytail: append (system dirs keep priority); prepend instead if local
+/// binaries must shadow system ones like a real terminal does.
+fn augmented_path() -> Option<std::ffi::OsString> {
+    let current = std::env::var_os("PATH")?;
+    let home = std::env::var_os("HOME")?;
+    let mut parts: Vec<_> = std::env::split_paths(&current).collect();
+    for dir in ["bin", ".local/bin", ".cargo/bin", ".bun/bin", "go/bin"] {
+        let candidate = std::path::Path::new(&home).join(dir);
+        if candidate.is_dir() && !parts.contains(&candidate) {
+            parts.push(candidate);
+        }
+    }
+    std::env::join_paths(parts).ok()
+}
+
 /// Result of running a command in a PTY.
 #[derive(Debug)]
 pub struct RunOutcome {
@@ -68,6 +87,9 @@ fn run_command_inner(
     cmd.arg(command);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    if let Some(path) = augmented_path() {
+        cmd.env("PATH", path);
+    }
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
@@ -241,6 +263,27 @@ mod tests {
             start.elapsed() < Duration::from_secs(5),
             "stop flag did not kill the command: {:?}",
             start.elapsed()
+        );
+    }
+
+    #[test]
+    fn augmented_path_keeps_original_dirs_and_adds_existing_user_dirs() {
+        let original: Vec<_> =
+            std::env::split_paths(&std::env::var_os("PATH").expect("PATH set")).collect();
+        let augmented: Vec<_> =
+            std::env::split_paths(&augmented_path().expect("some PATH")).collect();
+        // Original dirs stay at the front, in order.
+        assert_eq!(&augmented[..original.len()], &original[..]);
+        // Appended dirs must exist and be user-local; none repeats another.
+        for p in &augmented[original.len()..] {
+            assert!(p.is_dir(), "appended dir does not exist: {p:?}");
+            assert!(p.starts_with(std::env::var_os("HOME").unwrap()));
+        }
+        let appended: std::collections::HashSet<_> = augmented[original.len()..].iter().collect();
+        assert_eq!(
+            appended.len(),
+            augmented.len() - original.len(),
+            "duplicate appended dirs in PATH"
         );
     }
 
