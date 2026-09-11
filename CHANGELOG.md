@@ -2,7 +2,7 @@
 
 All notable changes to termcard are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.3] - 2026-09-10
+## [0.1.3] - 2026-09-10 (838bfd3)
 
 ### Added
 
@@ -16,6 +16,7 @@ All notable changes to termcard are documented in this file. The format follows 
 
 ### Fixed
 
+- The AppImage from the release launches on systems with a newer Linux stack. The bundle carried older Wayland libraries that shadowed the system's, and the webview then failed to create an EGL display, showing a blank window. The release workflow now strips those libraries from the bundle before uploading, as every GTK-capable system provides its own.
 - Release builds can now run commands installed outside the system PATH: the captured pseudo-terminal augments the inherited PATH with the user's local bin directories (`~/bin`, `~/.local/bin`, `~/.cargo/bin`, `~/.bun/bin`, `~/go/bin`).
 - The app ships its own icon instead of the default Tauri logo.
 - The card no longer clips at the bottom edge: window sizes are computed and floored outside the frame, and the bottom padding is back.
@@ -24,7 +25,7 @@ All notable changes to termcard are documented in this file. The format follows 
 
 **Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.2...v0.1.3
 
-## [0.1.2] - 2026-09-09
+## [0.1.2] - 2026-09-09 (fbbfcc6)
 
 ### Added
 
@@ -37,7 +38,7 @@ All notable changes to termcard are documented in this file. The format follows 
 
 **Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.1...v0.1.2
 
-## [0.1.0] - 2026-09-09
+## [0.1.0] - 2026-09-09 (720452b)
 
 First release.
 
@@ -53,7 +54,7 @@ First release.
 - Colors, emoji, and tab-aligned columns captured faithfully (`TERM=xterm-256color`, `COLORTERM=truecolor`, display-width-aware run merging).
 - Save dialog for PNG exports, with the file written by the Rust backend.
 
-## [0.1.1] - 2026-09-09
+## [0.1.1] - 2026-09-09 (9a0e732)
 
 ### Fixed
 
