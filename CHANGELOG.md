@@ -20,6 +20,7 @@ All notable changes to termcard are documented in this file. The format follows 
 - The app ships its own icon instead of the default Tauri logo.
 - The card no longer clips at the bottom edge: window sizes are computed and floored outside the frame, and the bottom padding is back.
 - Switching presets keeps the fields you customized instead of resetting them.
+- The Vite config runs under the native config loader: the alias resolves with `import.meta.dirname`, `package.json` imports with an explicit JSON type, and the version label is injected as a build-time constant instead of relying on release-time folding.
 
 **Full changelog:** https://github.com/srnoob2570/termcard/compare/v0.1.2...v0.1.3
 
