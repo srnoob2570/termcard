@@ -9,14 +9,17 @@ jobs:
     build:
         permissions:
             contents: write
-        # runs-on: ubuntu-latest
-        # GTK/WebKit system libs are baked into the cron-runner image; no
-        # sudo apt-get possible on that runner. Rust toolchain installs
-        # per-run and persists via CARGO_HOME/RUSTUP_HOME on the runner
-        # cache volume (set in the cron-runner compose file).
         runs-on: [self-hosted, cron-runner]
         steps:
             - uses: actions/checkout@v6
+
+            # Same list the GitHub-hosted Tauri runner images use, plus
+            # rpm (bundle target) and xdg-utils (xdg-open, needed by
+            # linuxdeploy during AppImage bundling).
+            - name: Install system dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xdg-utils rpm
 
             - uses: dtolnay/rust-toolchain@stable
 
