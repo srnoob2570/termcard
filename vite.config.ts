@@ -1,17 +1,22 @@
 import { defineConfig } from "vite";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import pkg from "./package.json" with { type: "json" };
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
+// Single source of truth for the app version: src-tauri/Cargo.toml, injected
+// as a build-time constant (no `import.meta.env`, per repo rules).
+const cargoVersion =
+    readFileSync(path.resolve(import.meta.dirname, "src-tauri/Cargo.toml"), "utf8").match(
+        /^version\s*=\s*"([^"]+)"/m
+    )?.[1] ?? "0.0.0";
+
 // https://vite.dev/config/
 export default defineConfig(() => ({
-    // Single source of truth for the app version: package.json, injected as
-    // a build-time constant (no `import.meta.env`, per repo rules).
     define: {
-        __APP_VERSION__: JSON.stringify(pkg.version),
+        __APP_VERSION__: JSON.stringify(cargoVersion),
     },
 
     plugins: [react(), tailwindcss()],
