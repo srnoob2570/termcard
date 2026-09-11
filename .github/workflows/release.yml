@@ -64,3 +64,22 @@ jobs:
                   releaseBody: ${{ steps.notes.outputs.body }}
                   releaseDraft: false
                   prerelease: false
+
+            # linuxdeploy copies every transitive dep, including the runner's
+            # older libwayland (noble: 1.22). On hosts with a newer stack the
+            # bundled copy shadows the system one and WebKit's eglGetDisplay
+            # fails with EGL_BAD_PARAMETER (blank window). Drop the bundled
+            # wayland libs (every GTK-capable system ships its own) and
+            # re-upload the artifact.
+            - name: Drop bundled wayland libs from the AppImage
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  cd src-tauri/target/release/bundle/appimage
+                  f=$(ls termcard_*.AppImage)
+                  ./"$f" --appimage-extract >/dev/null
+                  rm squashfs-root/usr/lib/libwayland-*
+                  wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+                  chmod +x appimagetool-x86_64.AppImage
+                  APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool-x86_64.AppImage -n squashfs-root "$f"
+                  gh release upload "$GITHUB_REF_NAME" "$f" --clobber
