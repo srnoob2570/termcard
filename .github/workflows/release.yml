@@ -16,6 +16,12 @@ jobs:
             # Same list the GitHub-hosted Tauri runner images use, plus
             # rpm (bundle target) and xdg-utils (xdg-open, needed by
             # linuxdeploy during AppImage bundling).
+            - name: Cache apt packages
+              uses: actions/cache@v4
+              with:
+                  path: /var/cache/apt/archives
+                  key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}
+
             - name: Install system dependencies
               run: |
                   sudo apt-get update
@@ -24,11 +30,18 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
 
             - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri
 
             - uses: oven-sh/setup-bun@v2
 
+            - uses: actions/cache@v4
+              with:
+                  path: ~/.bun/install/cache
+                  key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
             - name: Install frontend dependencies
-              run: bun install
+              run: bun install --frozen-lockfile
 
             # Extract this tag's section from CHANGELOG.md as the release
             # body. tauri-action overwrites the body on every run, so without
